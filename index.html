@@ -47,9 +47,26 @@
 
 <script>
   const btn = document.getElementById('connectBtn');
-  btn.addEventListener('click', () => {
+
+  btn.addEventListener('click', async () => {
+    if (!window.ethereum) {
+      alert('No wallet found');
+      return;
+    }
+
     btn.textContent = 'Connecting…';
     btn.disabled = true;
+
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      btn.textContent = accounts[0].slice(0, 6) + '...' + accounts[0].slice(-4);
+    } catch (e) {
+      btn.textContent = 'Connect Wallet';
+      btn.disabled = false;
+    }
   });
 </script>
 
