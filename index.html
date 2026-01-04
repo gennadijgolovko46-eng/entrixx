@@ -40,8 +40,17 @@
 
   <body>
     <h1>ENTRIXX</h1>
-    <p>Mirror of trading decisions</p>
-    <button>Connect Wallet</button>
-    <p>You can withdraw ENTRIXX at any time via the contract.</p>
-  </body>
-</html>
+
+<p>Mirror of trading decisions</p>
+
+<button id="connectBtn">Connect Wallet</button>
+
+<script>
+  const btn = document.getElementById('connectBtn');
+  btn.addEventListener('click', () => {
+    btn.textContent = 'Connecting…';
+    btn.disabled = true;
+  });
+</script>
+
+<p>You can withdraw ENTRIXX at any time via the contract.</p>
