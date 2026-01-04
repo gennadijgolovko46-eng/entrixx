@@ -62,7 +62,8 @@
         method: 'eth_requestAccounts'
       });
 
-      btn.textContent = accounts[0].slice(0, 6) + '...' + accounts[0].slice(-4);
+      btn.textContent = 'Deposit 1 ENTRIXX';
+btn.disabled = false;
     } catch (e) {
       btn.textContent = 'Connect Wallet';
       btn.disabled = false;
