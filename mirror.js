@@ -1,6 +1,6 @@
 /* ===============================
    ENTRIXX — MIRROR
-   Axis (24h) + Layer 1 (Decisions)
+   Axis (24h) + Layer 1 (Decisions, raw)
    =============================== */
 
 const wrap = document.getElementById('wrap');
@@ -81,38 +81,57 @@ function drawAxis() {
   ctxAxis.stroke();
 }
 
-/* ===== DECISIONS LAYER ===== */
+/* ===== DECISIONS LAYER (HONEST) ===== */
 function renderDecisions() {
   ctxDecisions.clearRect(0, 0, width, height);
 
   const baseY = height / 2;
+
+  // усиленный вертикальный разнос
+  const DIR_OFFSET = 22;      // было ~10
+  const FAN_SPREAD = 6;       // разведение хвостов в плотных сериях
+
   ctxDecisions.lineWidth = 1;
   ctxDecisions.strokeStyle = '#000';
   ctxDecisions.fillStyle = '#000';
 
+  let fanIndexUp = 0;
+  let fanIndexDown = 0;
+
   decisions.forEach(d => {
     const x = timeToX(d.t);
-    if (x < -20 || x > width + 20) return;
+    if (x < -30 || x > width + 30) return;
 
+    // ликвидации / -2 — резкая геометрия
     if (d.w === -2) {
+      const size = 6; // больше, чем обычная точка
       ctxDecisions.beginPath();
-      ctxDecisions.moveTo(x - 4, baseY - 4);
-      ctxDecisions.lineTo(x + 4, baseY + 4);
-      ctxDecisions.moveTo(x + 4, baseY - 4);
-      ctxDecisions.lineTo(x - 4, baseY + 4);
+      ctxDecisions.moveTo(x - size, baseY - size);
+      ctxDecisions.lineTo(x + size, baseY + size);
+      ctxDecisions.moveTo(x + size, baseY - size);
+      ctxDecisions.lineTo(x - size, baseY + size);
       ctxDecisions.stroke();
       return;
     }
 
     const dir = d.w === 1 ? -1 : 1;
-    const y = baseY + dir * 10;
 
+    // веер для плотности (честный шум)
+    const fanOffset =
+      dir === -1
+        ? (fanIndexUp++ % 3) * FAN_SPREAD
+        : (fanIndexDown++ % 3) * FAN_SPREAD;
+
+    const y = baseY + dir * (DIR_OFFSET + fanOffset);
+
+    // точка решения
     ctxDecisions.beginPath();
     ctxDecisions.arc(x, y, 2, 0, Math.PI * 2);
     ctxDecisions.fill();
 
+    // хвост удержания
     if (d.hold > 0) {
-      const tail = d.hold * 0.00004;
+      const tail = d.hold * 0.00004; // как раньше, без сглаживания
       ctxDecisions.beginPath();
       ctxDecisions.moveTo(x, y);
       ctxDecisions.lineTo(x, y + dir * tail);
