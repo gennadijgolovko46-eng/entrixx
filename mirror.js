@@ -1,5 +1,5 @@
 /* ===============================
-   ENTRIXX — MIRROR (STEP 1: TIME)
+   ENTRIXX — MIRROR (TIME CLAMP)
    =============================== */
 
 const wrap = document.getElementById('wrap');
@@ -13,7 +13,6 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2);
 
 let width = 0;
 let height = 0;
-let cursorX = null;
 
 /* ===== SIZE ===== */
 function resize() {
@@ -47,10 +46,8 @@ function drawLine(x) {
 
 /* ===== TIME ===== */
 function xToTime(x) {
-  // neutral mapping: screen X → moment now
-  // replace later with real CENTER_TIME mapping
   const now = Date.now();
-  const span = 6 * 60 * 60 * 1000; // ±6h window (temporary)
+  const span = 6 * 60 * 60 * 1000; // временно
   const t = now + ((x / width) - 0.5) * span;
   return new Date(t);
 }
@@ -58,7 +55,20 @@ function xToTime(x) {
 function showTime(x) {
   const d = xToTime(x);
   timeLabel.textContent = d.toUTCString().slice(0, 22);
-  timeLabel.style.left = x + 'px';
+
+  // дать браузеру посчитать ширину
+  const labelWidth = timeLabel.offsetWidth;
+  const margin = 8;
+
+  let left = x;
+
+  const min = labelWidth / 2 + margin;
+  const max = width - labelWidth / 2 - margin;
+
+  if (left < min) left = min;
+  if (left > max) left = max;
+
+  timeLabel.style.left = left + 'px';
   timeLabel.style.opacity = 1;
 }
 
@@ -69,9 +79,9 @@ function hideTime() {
 /* ===== INPUT ===== */
 function updateFromClientX(clientX) {
   const rect = wrap.getBoundingClientRect();
-  cursorX = clientX - rect.left;
-  drawLine(cursorX);
-  showTime(cursorX);
+  const x = clientX - rect.left;
+  drawLine(x);
+  showTime(x);
 }
 
 wrap.addEventListener('touchstart', e => {
