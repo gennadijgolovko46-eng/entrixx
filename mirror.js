@@ -14,12 +14,13 @@ const wrap = document.getElementById('wrap');
 const timeLabel = document.getElementById('time');
 const backBtn = document.getElementById('back');
 
-const canvases = [
-  document.getElementById('layer1'),
-  document.getElementById('layer2'),
-  document.getElementById('layer3')
-];
-const ctxs = canvases.map(c => c.getContext('2d'));
+const canvasData1 = document.getElementById('layer1');
+const canvasData2 = document.getElementById('layer2');
+const canvasOverlay = document.getElementById('layer3');
+
+const ctx1 = canvasData1.getContext('2d');
+const ctx2 = canvasData2.getContext('2d');
+const ctxOverlay = canvasOverlay.getContext('2d');
 
 /* ===== DPI ===== */
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -32,22 +33,27 @@ function resize() {
   width = wrap.clientWidth;
   height = wrap.clientHeight;
 
-  canvases.forEach((c, i) => {
+  [canvasData1, canvasData2, canvasOverlay].forEach(c => {
     c.width = width * DPR;
     c.height = height * DPR;
     c.style.width = width + 'px';
     c.style.height = height + 'px';
-    ctxs[i].setTransform(DPR, 0, 0, DPR, 0, 0);
   });
 
-  renderAll();
+  [ctx1, ctx2, ctxOverlay].forEach(ctx => {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  });
+
+  renderStatic();
 }
+
 window.addEventListener('resize', resize);
 
 /* ===== STATE ===== */
 let decisions = [];
 let CENTER_TIME = 0;
 let cursorX = null;
+let isTouching = false;
 
 /* ===== SOURCE ===== */
 async function loadSource() {
@@ -63,7 +69,7 @@ async function loadSource() {
       .sort((a, b) => a.t - b.t);
 
     CENTER_TIME = decisions[decisions.length - 1].t;
-    renderAll();
+    renderStatic();
   } catch (_) {}
 }
 
@@ -81,140 +87,110 @@ function clear(ctx) {
   ctx.clearRect(0, 0, width, height);
 }
 
-/* ===== LAYERS ===== */
-function renderLayer1() {
-  const ctx = ctxs[0];
-  clear(ctx);
+/* ===== STATIC RENDER ===== */
+function renderStatic() {
+  clear(ctx1);
+  clear(ctx2);
+  clear(ctxOverlay);
 
+  renderLayer1();
+  renderLayer2();
+}
+
+/* ===== LAYER 1 — DECISIONS ===== */
+function renderLayer1() {
   const baseY = height / 2 - LAYER_GAP;
-  ctx.lineWidth = LINE_WIDTH;
-  ctx.strokeStyle = '#000';
-  ctx.fillStyle = '#000';
+  ctx1.lineWidth = LINE_WIDTH;
+  ctx1.strokeStyle = '#000';
+  ctx1.fillStyle = '#000';
 
   decisions.forEach(d => {
     const x = timeToX(d.t);
 
     if (d.w === -2) {
-      ctx.beginPath();
-      ctx.moveTo(x - 4, baseY - 4);
-      ctx.lineTo(x + 4, baseY + 4);
-      ctx.moveTo(x + 4, baseY - 4);
-      ctx.lineTo(x - 4, baseY + 4);
-      ctx.stroke();
+      ctx1.beginPath();
+      ctx1.moveTo(x - 4, baseY - 4);
+      ctx1.lineTo(x + 4, baseY + 4);
+      ctx1.moveTo(x + 4, baseY - 4);
+      ctx1.lineTo(x - 4, baseY + 4);
+      ctx1.stroke();
       return;
     }
 
     const dir = d.w === 1 ? -1 : 1;
     const y = baseY + dir * 10;
 
-    ctx.beginPath();
-    ctx.arc(x, y, POINT_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
+    ctx1.beginPath();
+    ctx1.arc(x, y, POINT_RADIUS, 0, Math.PI * 2);
+    ctx1.fill();
 
     if (d.hold > 0) {
       const tail = d.hold * HOLD_SCALE;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y + dir * tail);
-      ctx.stroke();
+      ctx1.beginPath();
+      ctx1.moveTo(x, y);
+      ctx1.lineTo(x, y + dir * tail);
+      ctx1.stroke();
     }
   });
 }
 
+/* ===== LAYER 2 — DENSITY ===== */
 function renderLayer2() {
-  const ctx = ctxs[1];
-  clear(ctx);
-
   const baseY = height / 2;
-  ctx.lineWidth = LINE_WIDTH;
-  ctx.strokeStyle = '#000';
+  ctx2.lineWidth = LINE_WIDTH;
+  ctx2.strokeStyle = '#000';
 
   for (let i = 1; i < decisions.length; i++) {
     const a = decisions[i - 1];
     const b = decisions[i];
     if (a.w === -2 || b.w === -2) continue;
 
-    ctx.beginPath();
-    ctx.moveTo(timeToX(a.t), baseY);
-    ctx.lineTo(timeToX(b.t), baseY);
-    ctx.stroke();
+    ctx2.beginPath();
+    ctx2.moveTo(timeToX(a.t), baseY);
+    ctx2.lineTo(timeToX(b.t), baseY);
+    ctx2.stroke();
   }
 }
 
-function renderLayer3() {
-  const ctx = ctxs[2];
-  clear(ctx);
+/* ===== OVERLAY — LINE ===== */
+function renderLine(x) {
+  clear(ctxOverlay);
 
-  const baseY = height / 2 + LAYER_GAP;
-  ctx.lineWidth = LINE_WIDTH;
-  ctx.strokeStyle = '#000';
-
-  decisions.forEach(d => {
-    const x = timeToX(d.t);
-    ctx.beginPath();
-    ctx.moveTo(x, baseY - 6);
-    ctx.lineTo(x, baseY + 6);
-    ctx.stroke();
-  });
+  ctxOverlay.save();
+  ctxOverlay.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctxOverlay.lineWidth = 1;
+  ctxOverlay.beginPath();
+  ctxOverlay.moveTo(x + 0.5, 0);
+  ctxOverlay.lineTo(x + 0.5, height);
+  ctxOverlay.stroke();
+  ctxOverlay.restore();
 }
 
-/* ===== CROSSHAIR ===== */
-function renderCrosshair(x) {
-  ctxs.forEach(ctx => {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, height);
-    ctx.stroke();
-    ctx.restore();
-  });
-}
-
-/* ===== RENDER ===== */
-function renderAll() {
-  renderLayer1();
-  renderLayer2();
-  renderLayer3();
-
-  if (cursorX !== null) {
-    renderCrosshair(cursorX);
-  }
-}
-
-/* ===== INTERACTION ===== */
-wrap.addEventListener('pointermove', e => {
+/* ===== TOUCH ===== */
+wrap.addEventListener('touchstart', e => {
   if (!CENTER_TIME) return;
+  isTouching = true;
+  e.preventDefault();
 
   const rect = wrap.getBoundingClientRect();
-  cursorX = e.clientX - rect.left;
+  cursorX = e.touches[0].clientX - rect.left;
 
-  renderAll();
-});
+  renderLine(cursorX);
+}, { passive: false });
 
-wrap.addEventListener('pointerdown', e => {
-  if (!CENTER_TIME) return;
+wrap.addEventListener('touchmove', e => {
+  if (!isTouching || !CENTER_TIME) return;
+  e.preventDefault();
 
   const rect = wrap.getBoundingClientRect();
-  cursorX = e.clientX - rect.left;
+  cursorX = e.touches[0].clientX - rect.left;
 
-  const d = new Date(xToTime(cursorX));
-  timeLabel.textContent = d.toUTCString().slice(0, 22);
-  timeLabel.style.left = cursorX + 'px';
-  timeLabel.style.opacity = 1;
+  renderLine(cursorX);
+}, { passive: false });
 
-  renderAll();
-});
-
-wrap.addEventListener('pointerup', () => {
-  timeLabel.style.opacity = 0;
-});
-
-wrap.addEventListener('pointerleave', () => {
-  cursorX = null;
-  timeLabel.style.opacity = 0;
-  renderAll();
+wrap.addEventListener('touchend', () => {
+  isTouching = false;
+  clear(ctxOverlay);
 });
 
 /* ===== NAV ===== */
