@@ -21,6 +21,9 @@ const canvases = [
 ];
 const ctxs = canvases.map(c => c.getContext('2d'));
 
+/* ===== DPI ===== */
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
 /* ===== SIZE ===== */
 let width = 0;
 let height = 0;
@@ -28,17 +31,25 @@ let height = 0;
 function resize() {
   width = wrap.clientWidth;
   height = wrap.clientHeight;
-  canvases.forEach(c => {
-    c.width = width;
-    c.height = height;
+
+  canvases.forEach((c, i) => {
+    c.width = width * DPR;
+    c.height = height * DPR;
+    c.style.width = width + 'px';
+    c.style.height = height + 'px';
+    ctxs[i].setTransform(DPR, 0, 0, DPR, 0, 0);
   });
+
   renderAll();
 }
+
 window.addEventListener('resize', resize);
 
 /* ===== STATE ===== */
 let decisions = [];
 let CENTER_TIME = 0;
+let isTouching = false;
+let cursorX = 0;
 
 /* ===== SOURCE ===== */
 async function loadSource() {
@@ -158,8 +169,8 @@ function renderCrosshair(x) {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, height);
     ctx.stroke();
     ctx.restore();
   });
@@ -173,22 +184,40 @@ function renderAll() {
 }
 
 /* ===== INTERACTION ===== */
-wrap.addEventListener('pointermove', e => {
+wrap.addEventListener('pointerdown', e => {
   if (!CENTER_TIME) return;
+  isTouching = true;
 
   const rect = wrap.getBoundingClientRect();
-  const x = e.clientX - rect.left;
+  cursorX = e.clientX - rect.left;
 
   renderAll();
-  renderCrosshair(x);
+  renderCrosshair(cursorX);
+});
 
-  const d = new Date(xToTime(x));
+wrap.addEventListener('pointermove', e => {
+  if (!CENTER_TIME || !isTouching) return;
+
+  const rect = wrap.getBoundingClientRect();
+  cursorX = e.clientX - rect.left;
+
+  renderAll();
+  renderCrosshair(cursorX);
+
+  const d = new Date(xToTime(cursorX));
   timeLabel.textContent = d.toUTCString().slice(0, 22);
-  timeLabel.style.left = x + 'px';
+  timeLabel.style.left = cursorX + 'px';
   timeLabel.style.opacity = 1;
 });
 
+wrap.addEventListener('pointerup', () => {
+  isTouching = false;
+  renderAll();
+  timeLabel.style.opacity = 0;
+});
+
 wrap.addEventListener('pointerleave', () => {
+  isTouching = false;
   renderAll();
   timeLabel.style.opacity = 0;
 });
