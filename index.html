@@ -61,6 +61,11 @@
 
       btn.textContent = 'Preparing deposit…';
 btn.disabled = true;
+
+setTimeout(() => {
+  btn.textContent = 'Deposit 1 ENTRIXX';
+  btn.disabled = false;
+}, 1200);
     } catch (e) {
       btn.textContent = 'Connect Wallet';
       btn.disabled = false;
