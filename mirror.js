@@ -1,11 +1,11 @@
 /* ===============================
-   ENTRIXX — MIRROR (LINE SIMPLE)
+   ENTRIXX — MIRROR (LINE FIXED)
    =============================== */
 
 const wrap = document.getElementById('wrap');
 const backBtn = document.getElementById('back');
 
-const canvas = document.getElementById('layer3'); // use top canvas only
+const canvas = document.getElementById('layer3');
 const ctx = canvas.getContext('2d');
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -25,22 +25,24 @@ function resize() {
   canvas.style.height = height + 'px';
 
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  redraw();
+  clear();
 }
 
 window.addEventListener('resize', resize);
 
 /* ===== DRAW ===== */
-function redraw() {
-  ctx.clearRect(0, 0, width, height);
+function clear() {
+  ctx.clearRect(0, 0, canvas.width / DPR, canvas.height / DPR);
+}
 
-  if (cursorX === null) return;
+function drawLine(x) {
+  clear();
 
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(cursorX + 0.5, 0);
-  ctx.lineTo(cursorX + 0.5, height);
+  ctx.moveTo(x + 0.5, 0);
+  ctx.lineTo(x + 0.5, canvas.height / DPR);
   ctx.stroke();
 }
 
@@ -48,7 +50,7 @@ function redraw() {
 function updateFromClientX(clientX) {
   const rect = wrap.getBoundingClientRect();
   cursorX = clientX - rect.left;
-  redraw();
+  drawLine(cursorX);
 }
 
 wrap.addEventListener('touchstart', e => {
@@ -61,8 +63,16 @@ wrap.addEventListener('touchmove', e => {
   updateFromClientX(e.touches[0].clientX);
 }, { passive: false });
 
+wrap.addEventListener('touchend', () => {
+  clear();
+});
+
 wrap.addEventListener('mousemove', e => {
   updateFromClientX(e.clientX);
+});
+
+wrap.addEventListener('mouseleave', () => {
+  clear();
 });
 
 /* ===== NAV ===== */
