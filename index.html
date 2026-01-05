@@ -55,12 +55,9 @@
     }
 
     btn.textContent = 'Connecting…';
-    btn.disabled = true;
 
     try {
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
+      // deposit will be called here
 
       btn.textContent = 'Preparing deposit…';
 btn.disabled = true;
