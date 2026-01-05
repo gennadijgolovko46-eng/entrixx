@@ -1,5 +1,5 @@
 /* ===============================
-   ENTRIXX — MIRROR (SOURCE)
+   ENTRIXX — MIRROR
    =============================== */
 
 /* ===== CONFIG ===== */
@@ -40,16 +40,10 @@ window.addEventListener('resize', resize);
 let decisions = [];
 let CENTER_TIME = 0;
 
-/* ===== URL ===== */
-const params = new URLSearchParams(window.location.search);
-const USER_ID = params.get('id');
-
 /* ===== SOURCE ===== */
 async function loadSource() {
   try {
-    const res = await fetch(`/api/mirror?id=${USER_ID}`, {
-      cache: 'no-store'
-    });
+    const res = await fetch('source.json', { cache: 'no-store' });
     if (!res.ok) return;
 
     const data = await res.json();
@@ -57,13 +51,11 @@ async function loadSource() {
 
     decisions = data
       .filter(d => typeof d.t === 'number')
-      .sort((a, b) => (a.t !== b.t ? a.t - b.t : a.hold - b.hold));
+      .sort((a, b) => a.t - b.t);
 
     CENTER_TIME = decisions[decisions.length - 1].t;
     renderAll();
-  } catch (_) {
-    /* silence */
-  }
+  } catch (_) {}
 }
 
 /* ===== TIME MAP ===== */
@@ -92,6 +84,17 @@ function renderLayer1() {
 
   decisions.forEach(d => {
     const x = timeToX(d.t);
+
+    if (d.w === -2) {
+      ctx.beginPath();
+      ctx.moveTo(x - 4, baseY - 4);
+      ctx.lineTo(x + 4, baseY + 4);
+      ctx.moveTo(x + 4, baseY - 4);
+      ctx.lineTo(x - 4, baseY + 4);
+      ctx.stroke();
+      return;
+    }
+
     const dir = d.w === 1 ? -1 : 1;
     const y = baseY + dir * 10;
 
@@ -99,7 +102,7 @@ function renderLayer1() {
     ctx.arc(x, y, POINT_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
-    if (d.w !== -2 && d.hold > 0) {
+    if (d.hold > 0) {
       const tail = d.hold * HOLD_SCALE;
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -121,14 +124,11 @@ function renderLayer2() {
   for (let i = 1; i < decisions.length; i++) {
     const a = decisions[i - 1];
     const b = decisions[i];
-    if (a.w === -2) continue;
-
-    const x1 = timeToX(a.t);
-    const x2 = timeToX(b.t);
+    if (a.w === -2 || b.w === -2) continue;
 
     ctx.beginPath();
-    ctx.moveTo(x1, baseY);
-    ctx.lineTo(x2, baseY);
+    ctx.moveTo(timeToX(a.t), baseY);
+    ctx.lineTo(timeToX(b.t), baseY);
     ctx.stroke();
   }
 }
@@ -175,6 +175,7 @@ function renderAll() {
 /* ===== INTERACTION ===== */
 wrap.addEventListener('pointermove', e => {
   if (!CENTER_TIME) return;
+
   const rect = wrap.getBoundingClientRect();
   const x = e.clientX - rect.left;
 
@@ -182,12 +183,8 @@ wrap.addEventListener('pointermove', e => {
   renderCrosshair(x);
 
   const d = new Date(xToTime(x));
-  timeLabel.textContent = d.toLocaleString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  timeLabel.textContent = d.toUTCString().slice(0, 22);
+  timeLabel.style.left = x + 'px';
   timeLabel.style.opacity = 1;
 });
 
