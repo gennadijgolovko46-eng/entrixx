@@ -1,9 +1,10 @@
 /* ===============================
-   ENTRIXX — MIRROR (LINE FIXED)
+   ENTRIXX — MIRROR (STEP 1: TIME)
    =============================== */
 
 const wrap = document.getElementById('wrap');
 const backBtn = document.getElementById('back');
+const timeLabel = document.getElementById('time');
 
 const canvas = document.getElementById('layer3');
 const ctx = canvas.getContext('2d');
@@ -27,7 +28,6 @@ function resize() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   clear();
 }
-
 window.addEventListener('resize', resize);
 
 /* ===== DRAW ===== */
@@ -37,8 +37,7 @@ function clear() {
 
 function drawLine(x) {
   clear();
-
-  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x + 0.5, 0);
@@ -46,11 +45,33 @@ function drawLine(x) {
   ctx.stroke();
 }
 
+/* ===== TIME ===== */
+function xToTime(x) {
+  // neutral mapping: screen X → moment now
+  // replace later with real CENTER_TIME mapping
+  const now = Date.now();
+  const span = 6 * 60 * 60 * 1000; // ±6h window (temporary)
+  const t = now + ((x / width) - 0.5) * span;
+  return new Date(t);
+}
+
+function showTime(x) {
+  const d = xToTime(x);
+  timeLabel.textContent = d.toUTCString().slice(0, 22);
+  timeLabel.style.left = x + 'px';
+  timeLabel.style.opacity = 1;
+}
+
+function hideTime() {
+  timeLabel.style.opacity = 0;
+}
+
 /* ===== INPUT ===== */
 function updateFromClientX(clientX) {
   const rect = wrap.getBoundingClientRect();
   cursorX = clientX - rect.left;
   drawLine(cursorX);
+  showTime(cursorX);
 }
 
 wrap.addEventListener('touchstart', e => {
@@ -65,6 +86,7 @@ wrap.addEventListener('touchmove', e => {
 
 wrap.addEventListener('touchend', () => {
   clear();
+  hideTime();
 });
 
 wrap.addEventListener('mousemove', e => {
@@ -73,6 +95,7 @@ wrap.addEventListener('mousemove', e => {
 
 wrap.addEventListener('mouseleave', () => {
   clear();
+  hideTime();
 });
 
 /* ===== NAV ===== */
