@@ -62,8 +62,8 @@
         method: 'eth_requestAccounts'
       });
 
-      btn.textContent = 'Deposit 1 ENTRIXX';
-btn.disabled = false;
+      btn.textContent = 'Preparing deposit…';
+btn.disabled = true;
     } catch (e) {
       btn.textContent = 'Connect Wallet';
       btn.disabled = false;
