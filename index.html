@@ -1,76 +1,125 @@
-<!doctype html>
-<html>
-  <head>
-    <title>ENTRIXX</title>
-    <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        background: #fff;
-        color: #000;
-      }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ENTRIXX</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-      h1 {
-  margin-bottom: 10px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  font-size: 28px;
-      }
+  <!-- ethers (на будущее, пока не используется) -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
 
-      p {
-  margin-bottom: 28px;
-  opacity: 0.55;
-  font-size: 14px;
-      }
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #ffffff;
+      color: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
 
-      button {
-  padding: 10px 22px;
-  font-size: 13px;
-  opacity: 0.6;
-  border: 1px solid #ccc;
-  background: transparent;
-      }
-    </style>
-  </head>
+    .wrap {
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+    }
 
-  <body>
+    h1 {
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+
+    p {
+      color: #777;
+      margin-bottom: 24px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .note {
+      margin-top: 24px;
+      font-size: 13px;
+      color: #888;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
     <h1>ENTRIXX</h1>
+    <p>Mirror of trading decisions</p>
 
-<p>Mirror of trading decisions</p>
+    <button id="connectBtn">Connect Wallet</button>
 
-<button id="connectBtn">Connect Wallet</button>
+    <div class="note">
+      You can withdraw ENTRIXX at any time via the contract.
+    </div>
+  </div>
 
-<script>
-  const btn = document.getElementById('connectBtn');
+  <script>
+    const btn = document.getElementById('connectBtn');
 
-  btn.addEventListener('click', async () => {
-    if (!window.ethereum) {
-      alert('No wallet found');
-      return;
-    }
+    // состояния:
+    // idle → connecting → ready → preparing
+    let state = 'idle';
 
-    btn.textContent = 'Connecting…';
+    btn.addEventListener('click', async () => {
+      if (!window.ethereum) {
+        alert('No wallet found');
+        return;
+      }
 
-    try {
-      // deposit will be called here
+      // 1. CONNECT
+      if (state === 'idle') {
+        state = 'connecting';
+        btn.textContent = 'Connecting…';
+        btn.disabled = true;
 
-      btn.textContent = 'Preparing deposit…';
-btn.disabled = true;
+        try {
+          await window.ethereum.request({
+            method: 'eth_requestAccounts'
+          });
 
-setTimeout(() => {
-  btn.textContent = 'Deposit 1 ENTRIXX';
-  btn.disabled = false;
-}, 1200);
-    } catch (e) {
-      btn.textContent = 'Connect Wallet';
-      btn.disabled = false;
-    }
-  });
-</script>
+          state = 'ready';
+          btn.textContent = 'Deposit 1 ENTRIXX';
+          btn.disabled = false;
+        } catch (e) {
+          state = 'idle';
+          btn.textContent = 'Connect Wallet';
+          btn.disabled = false;
+        }
 
-<p>You can withdraw ENTRIXX at any time via the contract.</p>
+        return;
+      }
+
+      // 2. PREPARE DEPOSIT (пока без контракта)
+      if (state === 'ready') {
+        state = 'preparing';
+        btn.textContent = 'Preparing deposit…';
+        btn.disabled = true;
+
+        setTimeout(() => {
+          state = 'ready';
+          btn.textContent = 'Deposit 1 ENTRIXX';
+          btn.disabled = false;
+        }, 1200);
+      }
+    });
+  </script>
+</body>
+</html>
