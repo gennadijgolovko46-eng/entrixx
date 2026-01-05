@@ -1,12 +1,22 @@
 /* ===============================
-   ENTRIXX — MIRROR (SCRUB ONLY)
+   ENTRIXX — MIRROR (CENTER AXIS)
    =============================== */
 
 const wrap = document.getElementById('wrap');
 const backBtn = document.getElementById('back');
-const timeTop = document.getElementById('time'); // not used yet
 
-// create bottom time label dynamically
+/* ===== CANVAS (CENTER LINE) ===== */
+const canvas = document.getElementById('layer3');
+const ctx = canvas.getContext('2d');
+
+let width = 0;
+let height = 0;
+
+/* ===== TIME MODEL ===== */
+let CENTER_TIME = Date.now();
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/* ===== BOTTOM TIME LABEL ===== */
 const timeBottom = document.createElement('div');
 timeBottom.style.position = 'fixed';
 timeBottom.style.bottom = '12px';
@@ -15,74 +25,75 @@ timeBottom.style.transform = 'translateX(-50%)';
 timeBottom.style.fontSize = '12px';
 timeBottom.style.lineHeight = '1';
 timeBottom.style.whiteSpace = 'nowrap';
-timeBottom.style.opacity = '0';
 timeBottom.style.pointerEvents = 'none';
 document.body.appendChild(timeBottom);
 
-/* ===== TIME STATE ===== */
-let CENTER_TIME = Date.now();
+/* ===== SIZE ===== */
+function resize() {
+  width = wrap.clientWidth;
+  height = wrap.clientHeight;
 
-/* ===== SCRUB STATE ===== */
-let isTouching = false;
-let isScrubbing = false;
-let lastX = null;
+  canvas.width = width;
+  canvas.height = height;
 
-/* ===== CONFIG ===== */
-const TIME_SCALE = 0.00005; // same scale as before
+  drawCenterLine();
+}
+window.addEventListener('resize', resize);
 
-/* ===== HELPERS ===== */
-function showBottomTime() {
-  timeBottom.style.opacity = '1';
+/* ===== DRAW CENTER LINE ===== */
+function drawCenterLine() {
+  ctx.clearRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+
+  const x = Math.round(width / 2) + 0.5;
+
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, height);
+  ctx.stroke();
 }
 
-function hideBottomTime() {
-  timeBottom.style.opacity = '0';
-}
-
+/* ===== TIME DISPLAY ===== */
 function updateBottomTime() {
   const d = new Date(CENTER_TIME);
   timeBottom.textContent = d.toUTCString().slice(0, 22);
 }
 
-/* ===== INPUT ===== */
+/* ===== SCRUB ===== */
+let isTouching = false;
+let lastX = null;
+
+function applyScrub(dx) {
+  const timePerPixel = DAY_MS / width;
+  CENTER_TIME -= dx * timePerPixel;
+  updateBottomTime();
+}
+
 wrap.addEventListener('touchstart', e => {
   isTouching = true;
-  isScrubbing = false;
   lastX = e.touches[0].clientX;
 }, { passive: false });
 
 wrap.addEventListener('touchmove', e => {
   if (!isTouching) return;
-
   e.preventDefault();
 
   const x = e.touches[0].clientX;
   const dx = x - lastX;
   lastX = x;
 
-  // start scrubbing on first move
-  isScrubbing = true;
-
-  // move time: dragging right → past, left → future (TradingView-like)
-  CENTER_TIME -= dx / TIME_SCALE;
-
-  updateBottomTime();
-  showBottomTime();
-
-  // TODO later:
-  // renderStaticLayers(CENTER_TIME)
+  applyScrub(dx);
 }, { passive: false });
 
 wrap.addEventListener('touchend', () => {
   isTouching = false;
-  isScrubbing = false;
   lastX = null;
-  hideBottomTime();
 });
 
 wrap.addEventListener('mousedown', e => {
   isTouching = true;
-  isScrubbing = false;
   lastX = e.clientX;
 });
 
@@ -93,25 +104,17 @@ wrap.addEventListener('mousemove', e => {
   const dx = x - lastX;
   lastX = x;
 
-  isScrubbing = true;
-  CENTER_TIME -= dx / TIME_SCALE;
-
-  updateBottomTime();
-  showBottomTime();
+  applyScrub(dx);
 });
 
 wrap.addEventListener('mouseup', () => {
   isTouching = false;
-  isScrubbing = false;
   lastX = null;
-  hideBottomTime();
 });
 
 wrap.addEventListener('mouseleave', () => {
   isTouching = false;
-  isScrubbing = false;
   lastX = null;
-  hideBottomTime();
 });
 
 /* ===== NAV ===== */
@@ -120,4 +123,5 @@ backBtn.addEventListener('click', () => {
 });
 
 /* ===== INIT ===== */
+resize();
 updateBottomTime();
