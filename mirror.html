@@ -34,11 +34,24 @@
       right: 12px;
       z-index: 10;
     }
+
+    #time {
+      position: fixed;
+      top: 12px;
+      left: 0;
+      transform: translateX(-50%);
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
 
 <button id="back" onclick="history.back()">Back</button>
+<div id="time"></div>
 
 <div id="wrap">
   <canvas id="layer1"></canvas>
