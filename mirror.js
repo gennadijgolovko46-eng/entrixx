@@ -1,6 +1,6 @@
 /* ===============================
    ENTRIXX — MIRROR
-   Axis (24h) + Layer 1 (Decisions, raw)
+   Axis (24h) + Decisions + Density
    =============================== */
 
 const wrap = document.getElementById('wrap');
@@ -8,10 +8,12 @@ const backBtn = document.getElementById('back');
 
 /* ===== CANVASES ===== */
 const layerDecisions = document.getElementById('layer1');
-const layerAxis = document.getElementById('layer3');
+const layerDensity   = document.getElementById('layer2');
+const layerAxis      = document.getElementById('layer3');
 
 const ctxDecisions = layerDecisions.getContext('2d');
-const ctxAxis = layerAxis.getContext('2d');
+const ctxDensity   = layerDensity.getContext('2d');
+const ctxAxis      = layerAxis.getContext('2d');
 
 /* ===== SIZE ===== */
 let width = 0;
@@ -21,13 +23,13 @@ function resize() {
   width = wrap.clientWidth;
   height = wrap.clientHeight;
 
-  layerDecisions.width = width;
-  layerDecisions.height = height;
-  layerAxis.width = width;
-  layerAxis.height = height;
+  [layerDecisions, layerDensity, layerAxis].forEach(c => {
+    c.width = width;
+    c.height = height;
+  });
 
   drawAxis();
-  renderDecisions();
+  renderAll();
 }
 window.addEventListener('resize', resize);
 
@@ -56,88 +58,112 @@ async function loadSource() {
       updateBottomTime();
     }
 
-    renderDecisions();
+    renderAll();
   } catch (_) {}
 }
 
 /* ===== TIME ↔ X ===== */
 function timeToX(t) {
-  const dx = (t - CENTER_TIME) / DAY_MS;
-  return width / 2 + dx * width;
+  return width / 2 + ((t - CENTER_TIME) / DAY_MS) * width;
 }
 
 /* ===== AXIS ===== */
 function drawAxis() {
   ctxAxis.clearRect(0, 0, width, height);
-
-  ctxAxis.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctxAxis.strokeStyle = 'rgba(0,0,0,0.12)';
   ctxAxis.lineWidth = 1;
 
   const x = Math.round(width / 2) + 0.5;
-
   ctxAxis.beginPath();
   ctxAxis.moveTo(x, 0);
   ctxAxis.lineTo(x, height);
   ctxAxis.stroke();
 }
 
-/* ===== DECISIONS LAYER (HONEST) ===== */
+/* ===== DENSITY LAYER ===== */
+function renderDensity() {
+  ctxDensity.clearRect(0, 0, width, height);
+
+  ctxDensity.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctxDensity.lineWidth = 1;
+
+  const baseY = height / 2;
+
+  for (let i = 1; i < decisions.length; i++) {
+    const a = decisions[i - 1];
+    const b = decisions[i];
+
+    if (a.w === -2 || b.w === -2) continue;
+
+    const dt = b.t - a.t;
+    if (dt <= 0) continue;
+
+    // чем меньше пауза — тем плотнее штрихи
+    const intensity = Math.max(0, 1 - dt / (15 * 60 * 1000)); // 15 мин
+    if (intensity <= 0) continue;
+
+    const x1 = timeToX(a.t);
+    const x2 = timeToX(b.t);
+    if (x2 < -20 || x1 > width + 20) continue;
+
+    const steps = Math.floor(intensity * 6);
+
+    for (let s = 0; s < steps; s++) {
+      const y = baseY + (s - steps / 2) * 2;
+      ctxDensity.beginPath();
+      ctxDensity.moveTo(x1, y);
+      ctxDensity.lineTo(x2, y);
+      ctxDensity.stroke();
+    }
+  }
+}
+
+/* ===== DECISIONS LAYER ===== */
 function renderDecisions() {
   ctxDecisions.clearRect(0, 0, width, height);
 
   const baseY = height / 2;
+  const OFFSET = 22;
 
-  // усиленный вертикальный разнос
-  const DIR_OFFSET = 22;      // было ~10
-  const FAN_SPREAD = 6;       // разведение хвостов в плотных сериях
-
-  ctxDecisions.lineWidth = 1;
   ctxDecisions.strokeStyle = '#000';
   ctxDecisions.fillStyle = '#000';
-
-  let fanIndexUp = 0;
-  let fanIndexDown = 0;
+  ctxDecisions.lineWidth = 1;
 
   decisions.forEach(d => {
     const x = timeToX(d.t);
     if (x < -30 || x > width + 30) return;
 
-    // ликвидации / -2 — резкая геометрия
     if (d.w === -2) {
-      const size = 6; // больше, чем обычная точка
+      const s = 6;
       ctxDecisions.beginPath();
-      ctxDecisions.moveTo(x - size, baseY - size);
-      ctxDecisions.lineTo(x + size, baseY + size);
-      ctxDecisions.moveTo(x + size, baseY - size);
-      ctxDecisions.lineTo(x - size, baseY + size);
+      ctxDecisions.moveTo(x - s, baseY - s);
+      ctxDecisions.lineTo(x + s, baseY + s);
+      ctxDecisions.moveTo(x + s, baseY - s);
+      ctxDecisions.lineTo(x - s, baseY + s);
       ctxDecisions.stroke();
       return;
     }
 
-    const dir = d.w === 1 ? -1 : 1;
+    const y = baseY + (d.w === 1 ? -OFFSET : OFFSET);
 
-    // веер для плотности (честный шум)
-    const fanOffset =
-      dir === -1
-        ? (fanIndexUp++ % 3) * FAN_SPREAD
-        : (fanIndexDown++ % 3) * FAN_SPREAD;
-
-    const y = baseY + dir * (DIR_OFFSET + fanOffset);
-
-    // точка решения
     ctxDecisions.beginPath();
     ctxDecisions.arc(x, y, 2, 0, Math.PI * 2);
     ctxDecisions.fill();
 
-    // хвост удержания
     if (d.hold > 0) {
-      const tail = d.hold * 0.00004; // как раньше, без сглаживания
+      const tail = d.hold * 0.00004;
       ctxDecisions.beginPath();
       ctxDecisions.moveTo(x, y);
-      ctxDecisions.lineTo(x, y + dir * tail);
+      ctxDecisions.lineTo(x, y + tail);
       ctxDecisions.stroke();
     }
   });
+}
+
+/* ===== RENDER ALL ===== */
+function renderAll() {
+  renderDensity();
+  renderDecisions();
 }
 
 /* ===== BOTTOM TIME ===== */
@@ -152,60 +178,46 @@ timeBottom.style.pointerEvents = 'none';
 document.body.appendChild(timeBottom);
 
 function updateBottomTime() {
-  const d = new Date(CENTER_TIME);
-  timeBottom.textContent = d.toUTCString().slice(0, 22);
+  timeBottom.textContent = new Date(CENTER_TIME).toUTCString().slice(0, 22);
 }
 
 /* ===== SCRUB ===== */
-let isDragging = false;
+let dragging = false;
 let lastX = null;
 
 function scrub(dx) {
-  const timePerPixel = DAY_MS / width;
-  CENTER_TIME -= dx * timePerPixel;
+  CENTER_TIME -= dx * (DAY_MS / width);
   updateBottomTime();
-  renderDecisions();
+  renderAll();
 }
 
 wrap.addEventListener('touchstart', e => {
-  isDragging = true;
+  dragging = true;
   lastX = e.touches[0].clientX;
 }, { passive: false });
 
 wrap.addEventListener('touchmove', e => {
-  if (!isDragging) return;
+  if (!dragging) return;
   e.preventDefault();
-
-  const x = e.touches[0].clientX;
-  scrub(x - lastX);
-  lastX = x;
+  scrub(e.touches[0].clientX - lastX);
+  lastX = e.touches[0].clientX;
 }, { passive: false });
 
-wrap.addEventListener('touchend', () => {
-  isDragging = false;
-  lastX = null;
-});
+wrap.addEventListener('touchend', () => dragging = false);
 
 wrap.addEventListener('mousedown', e => {
-  isDragging = true;
+  dragging = true;
   lastX = e.clientX;
 });
 
 wrap.addEventListener('mousemove', e => {
-  if (!isDragging) return;
+  if (!dragging) return;
   scrub(e.clientX - lastX);
   lastX = e.clientX;
 });
 
-wrap.addEventListener('mouseup', () => {
-  isDragging = false;
-  lastX = null;
-});
-
-wrap.addEventListener('mouseleave', () => {
-  isDragging = false;
-  lastX = null;
-});
+wrap.addEventListener('mouseup', () => dragging = false);
+wrap.addEventListener('mouseleave', () => dragging = false);
 
 /* ===== NAV ===== */
 backBtn.addEventListener('click', () => history.back());
