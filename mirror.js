@@ -42,7 +42,6 @@ function resize() {
 
   renderAll();
 }
-
 window.addEventListener('resize', resize);
 
 /* ===== STATE ===== */
@@ -186,6 +185,8 @@ function renderAll() {
 /* ===== INTERACTION ===== */
 wrap.addEventListener('pointerdown', e => {
   if (!CENTER_TIME) return;
+
+  wrap.setPointerCapture(e.pointerId);
   isTouching = true;
 
   const rect = wrap.getBoundingClientRect();
@@ -196,7 +197,7 @@ wrap.addEventListener('pointerdown', e => {
 });
 
 wrap.addEventListener('pointermove', e => {
-  if (!CENTER_TIME || !isTouching) return;
+  if (!isTouching || !CENTER_TIME) return;
 
   const rect = wrap.getBoundingClientRect();
   cursorX = e.clientX - rect.left;
@@ -210,12 +211,17 @@ wrap.addEventListener('pointermove', e => {
   timeLabel.style.opacity = 1;
 });
 
-wrap.addEventListener('pointerup', () => {
+function releasePointer(e) {
   isTouching = false;
+  try {
+    wrap.releasePointerCapture(e.pointerId);
+  } catch (_) {}
   renderAll();
   timeLabel.style.opacity = 0;
-});
+}
 
+wrap.addEventListener('pointerup', releasePointer);
+wrap.addEventListener('pointercancel', releasePointer);
 wrap.addEventListener('pointerleave', () => {
   isTouching = false;
   renderAll();
