@@ -1,6 +1,6 @@
 /* ===============================
    ENTRIXX — MIRROR
-   Axis (24h) + Decisions + Density
+   Density with Inertia (Final)
    =============================== */
 
 const wrap = document.getElementById('wrap');
@@ -80,36 +80,49 @@ function drawAxis() {
   ctxAxis.stroke();
 }
 
-/* ===== DENSITY LAYER ===== */
+/* ===== DENSITY WITH INERTIA ===== */
 function renderDensity() {
   ctxDensity.clearRect(0, 0, width, height);
 
-  ctxDensity.strokeStyle = 'rgba(0,0,0,0.25)';
+  const baseY = height / 2;
+  const Tref = 15 * 60 * 1000; // 15 минут терпения
+  const lambda = 0.85;         // инерция
+  let prevD = 0;
+
+  ctxDensity.strokeStyle = 'rgba(0,0,0,0.35)';
   ctxDensity.lineWidth = 1;
 
-  const baseY = height / 2;
-
-  for (let i = 1; i < decisions.length; i++) {
-    const a = decisions[i - 1];
-    const b = decisions[i];
-
-    if (a.w === -2 || b.w === -2) continue;
+  for (let i = 0; i < decisions.length - 1; i++) {
+    const a = decisions[i];
+    const b = decisions[i + 1];
 
     const dt = b.t - a.t;
     if (dt <= 0) continue;
 
-    // чем меньше пауза — тем плотнее штрихи
-    const intensity = Math.max(0, 1 - dt / (15 * 60 * 1000)); // 15 мин
-    if (intensity <= 0) continue;
+    // базовая плотность интервала
+    let D0 = Math.max(0, 1 - dt / Tref);
+
+    // обрыв (ликвидация)
+    if (a.w === -2 || b.w === -2) {
+      prevD = 0;
+      continue;
+    }
+
+    // инерция
+    let D = Math.max(D0, lambda * prevD);
+    prevD = D;
+
+    if (D <= 0) continue;
 
     const x1 = timeToX(a.t);
     const x2 = timeToX(b.t);
     if (x2 < -20 || x1 > width + 20) continue;
 
-    const steps = Math.floor(intensity * 6);
+    // визуальное давление
+    const layers = Math.ceil(D * 6);
 
-    for (let s = 0; s < steps; s++) {
-      const y = baseY + (s - steps / 2) * 2;
+    for (let l = 0; l < layers; l++) {
+      const y = baseY + (l - layers / 2) * 2;
       ctxDensity.beginPath();
       ctxDensity.moveTo(x1, y);
       ctxDensity.lineTo(x2, y);
@@ -118,12 +131,12 @@ function renderDensity() {
   }
 }
 
-/* ===== DECISIONS LAYER ===== */
+/* ===== DECISIONS (SECONDARY) ===== */
 function renderDecisions() {
   ctxDecisions.clearRect(0, 0, width, height);
 
   const baseY = height / 2;
-  const OFFSET = 22;
+  const OFFSET = 18;
 
   ctxDecisions.strokeStyle = '#000';
   ctxDecisions.fillStyle = '#000';
@@ -133,6 +146,7 @@ function renderDecisions() {
     const x = timeToX(d.t);
     if (x < -30 || x > width + 30) return;
 
+    // ликвидация — разрыв
     if (d.w === -2) {
       const s = 6;
       ctxDecisions.beginPath();
@@ -160,7 +174,7 @@ function renderDecisions() {
   });
 }
 
-/* ===== RENDER ALL ===== */
+/* ===== RENDER ===== */
 function renderAll() {
   renderDensity();
   renderDecisions();
