@@ -4,25 +4,31 @@
 <meta charset="UTF-8">
 <title>ENTRIXX — Mirror</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #fff;
+  background: #ffffff;
   overflow: hidden;
-  font-family: system-ui, sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
 }
-canvas { display: block; }
+
+canvas {
+  display: block;
+}
+
 #time {
   position: fixed;
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 14px;
-  color: rgba(0,0,0,0.55);
+  color: rgba(0,0,0,0.5);
 }
+
 #back {
   position: fixed;
   bottom: 18px;
@@ -33,28 +39,32 @@ canvas { display: block; }
 }
 </style>
 </head>
+
 <body>
 
-<canvas id="c"></canvas>
+<canvas id="canvas"></canvas>
 <div id="time"></div>
 <a id="back" href="/">back</a>
 
 <script>
-const canvas = document.getElementById('c');
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
 }
+
 window.addEventListener('resize', resize);
 resize();
 
@@ -63,32 +73,34 @@ setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
+/* draw */
 function draw() {
-  const w = innerWidth;
-  const h = innerHeight;
-  ctx.clearRect(0,0,w,h);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  ctx.clearRect(0, 0, w, h);
 
-  const cx = w / 2;
+  const cx = Math.floor(w / 2);
 
   /* central axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
   ctx.lineTo(cx, h);
   ctx.stroke();
 
+  /* sample trades */
   const trades = [
-    { y: h/2 - 90, take: -50, miss: 80 },
-    { y: h/2,      take: -20, miss: 40 },
-    { y: h/2 + 90, take: -70, miss: 30 }
+    { y: h/2 - 100, take: -50, miss: 80 },
+    { y: h/2,       take: -30, miss: 40 },
+    { y: h/2 + 100, take: -70, miss: 30 }
   ];
 
   trades.forEach(t => drawTrade(cx, t.y, t.take, t.miss));
 }
 
 function drawTrade(x, y, take, miss) {
-  /* taken */
+  /* taken (solid) */
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -96,8 +108,8 @@ function drawTrade(x, y, take, miss) {
   ctx.lineTo(x, y + take);
   ctx.stroke();
 
-  /* missed (market after exit) */
-  ctx.setLineDash([6,6]);
+  /* missed (market continuation, dashed) */
+  ctx.setLineDash([6, 6]);
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -106,12 +118,13 @@ function drawTrade(x, y, take, miss) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  /* node */
+  /* exit point */
   ctx.fillStyle = '#000';
   ctx.beginPath();
-  ctx.arc(x, y, 3.5, 0, Math.PI*2);
+  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
   ctx.fill();
 }
 </script>
+
 </body>
 </html>
