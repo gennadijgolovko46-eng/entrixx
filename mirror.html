@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>ENTRIXX — Mirror</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
 html, body {
   margin: 0;
@@ -15,11 +14,7 @@ html, body {
   overflow: hidden;
   font-family: system-ui, sans-serif;
 }
-
-canvas {
-  display: block;
-}
-
+canvas { display: block; }
 #time {
   position: fixed;
   bottom: 18px;
@@ -28,7 +23,6 @@ canvas {
   font-size: 14px;
   color: rgba(0,0,0,0.55);
 }
-
 #back {
   position: fixed;
   bottom: 18px;
@@ -39,7 +33,6 @@ canvas {
 }
 </style>
 </head>
-
 <body>
 
 <canvas id="c"></canvas>
@@ -70,7 +63,6 @@ setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* draw */
 function draw() {
   const w = innerWidth;
   const h = innerHeight;
@@ -86,38 +78,40 @@ function draw() {
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  const points = [
-    { y: h/2 - 80, a: -60, b: 40 },
-    { y: h/2,      a: -30, b: 70 },
-    { y: h/2 + 80, a: -90, b: 30 }
+  const trades = [
+    { y: h/2 - 90, take: -50, miss: 80 },
+    { y: h/2,      take: -20, miss: 40 },
+    { y: h/2 + 90, take: -70, miss: 30 }
   ];
 
-  points.forEach(p => drawTail(cx, p.y, p.a, p.b));
+  trades.forEach(t => drawTrade(cx, t.y, t.take, t.miss));
 }
 
-function drawTail(x, y, take, miss) {
-  /* node */
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(x, y, 3.5, 0, Math.PI*2);
-  ctx.fill();
-
+function drawTrade(x, y, take, miss) {
   /* taken */
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x, y);
-  ctx.bezierCurveTo(
-    x + take * 0.4, y + take * 0.2,
-    x + take * 0.6, y + take * 0.8,
-    x, y + take
-  );
+  ctx.lineTo(x, y + take);
   ctx.stroke();
 
-  /* missed */
+  /* missed (market after exit) */
+  ctx.setLineDash([6,6]);
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(x, y);
-  ctx.bezierCurveTo(
-    x +
+  ctx.lineTo(x, y + miss);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* node */
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(x, y, 3.5, 0, Math.PI*2);
+  ctx.fill();
+}
+</script>
+</body>
+</html>
