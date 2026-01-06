@@ -1,131 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>ENTRIXX — Mirror V1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
 html, body {
   margin: 0;
   padding: 0;
+  background: #ffffff;
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+
+#wrap {
+  position: relative;
   width: 100%;
   height: 100%;
-  background: #ffffff;
-  overflow: hidden;
 }
 
 canvas {
-  display: block;
-}
-
-#time {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 13px;
-  color: rgba(0,0,0,0.5);
-  font-family: system-ui, sans-serif;
+  position: absolute;
+  inset: 0;
 }
 
 #back {
   position: fixed;
-  bottom: 16px;
   right: 16px;
-  font-size: 13px;
-  color: rgba(0,0,0,0.4);
-  text-decoration: none;
+  bottom: 16px;
+  font-size: 14px;
+  color: #999;
 }
 </style>
 </head>
 
 <body>
-
-<canvas id="canvas"></canvas>
-<div id="time"></div>
-<a id="back" href="/">back</a>
+<div id="wrap">
+  <canvas id="c"></canvas>
+</div>
+<div id="back">back</div>
 
 <script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const timeLabel = document.getElementById('time');
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
 
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  draw();
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
 }
-
-window.addEventListener('resize', resize);
+window.addEventListener("resize", resize);
 resize();
 
-setInterval(() => {
-  timeLabel.textContent = new Date().toUTCString();
-}, 1000);
+/* ===== CONFIG V1 ===== */
+const CENTER_X = canvas.width / 2;
+const SQUARE_SIZE = 6;
+const GAP_X = 6;
+const LINE_WIDTH = 2;
 
-// ===== TEST DATA (V1) =====
-const trades = [
-  { y: 200, hold: 120, market: 180 },
-  { y: 320, hold: -160, market: 90 },
-  { y: 440, hold: 100, market: -140 }
+/* ===== MOCK DATA (V1) =====
+ direction:  1  = up
+ direction: -1  = down
+ hold: time tail
+ market: market tail
+*/
+const events = [
+  { y: -120, direction:  1, hold: 40, market: 80 },
+  { y:    0, direction: -1, hold: 60, market: 30 },
+  { y:  140, direction:  1, hold: 30, market: 70 }
 ];
 
-// ===== DRAW =====
 function draw() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  ctx.clearRect(0, 0, w, h);
-
-  const cx = w / 2;
-
-  // central axis
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  // center axis
+  ctx.strokeStyle = "#e0e0e0";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, h);
+  ctx.moveTo(canvas.width / 2, 0);
+  ctx.lineTo(canvas.width / 2, canvas.height);
   ctx.stroke();
 
-  trades.forEach(t => drawTrade(cx, t.y, t.hold, t.market));
+  events.forEach(ev => {
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2 + ev.y;
+
+    /* ===== SQUARE (ANCHOR) ===== */
+    ctx.fillStyle = "#000";
+    ctx.fillRect(
+      cx - SQUARE_SIZE / 2,
+      cy - SQUARE_SIZE / 2,
+      SQUARE_SIZE,
+      SQUARE_SIZE
+    );
+
+    /* ===== HOLD TAIL (BLUE) ===== */
+    ctx.strokeStyle = "#2f6fff";
+    ctx.lineWidth = LINE_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(cx - GAP_X, cy);
+    ctx.lineTo(
+      cx - GAP_X,
+      cy - ev.direction * ev.hold
+    );
+    ctx.stroke();
+
+    /* ===== MARKET TAIL (GREEN) ===== */
+    ctx.strokeStyle = "#1fa36b";
+    ctx.beginPath();
+    ctx.moveTo(cx + GAP_X, cy);
+    ctx.lineTo(
+      cx + GAP_X,
+      cy - ev.direction * ev.market
+    );
+    ctx.stroke();
+  });
 }
 
-function drawTrade(x, y, hold, market) {
-  const size = 8;
-
-  // square (decision)
-  ctx.fillStyle = '#000';
-  ctx.fillRect(x - size / 2, y - size / 2, size, size);
-
-  const offsetHold = -6;
-  const offsetMarket = 6;
-
-  // hold tail (blue)
-  ctx.strokeStyle = '#2f6cff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + offsetHold, y);
-  ctx.lineTo(x + offsetHold, y + hold);
-  ctx.stroke();
-
-  // market tail (green)
-  ctx.strokeStyle = '#2fa36b';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + offsetMarket, y);
-  ctx.lineTo(x + offsetMarket, y + market);
-  ctx.stroke();
-}
+draw();
 </script>
-
 </body>
 </html>
