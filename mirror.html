@@ -47,10 +47,6 @@ canvas {
 <a id="back" href="/">back</a>
 
 <script>
-/* ===============================
-   ENTRIXX — MIRROR (TAIL LOGIC)
-   =============================== */
-
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
@@ -70,30 +66,24 @@ function resize() {
   draw();
 }
 window.addEventListener('resize', resize);
-resize();
 
 /* ===== TIME ===== */
 setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/*
-  DATA MODEL
-  y        — vertical position
-  dir      — +1 long, -1 short
-  hold     — magnitude of holding (your action)
-  market   — magnitude of market move after exit
+/* ===== DATA =====
+dir:  1 = long, -1 = short
+hold: holding duration (you)
+market: market move after exit
 */
-const trades = [
-  // long, market continued
-  { y: -120, dir:  1, hold: 60, market: 120 },
-
-  // long, market reversed
-  { y:   0,  dir:  1, hold: 50, market: -80 },
-
-  // short, market continued
-  { y: 120,  dir: -1, hold: 70, market: -40 }
-];
+function getTrades(h) {
+  return [
+    { y: h * 0.35, dir:  1, hold: 70, market: 120 },
+    { y: h * 0.50, dir: -1, hold: 60, market: -40 },
+    { y: h * 0.65, dir:  1, hold: 40, market: -90 }
+  ];
+}
 
 /* ===== DRAW ===== */
 function draw() {
@@ -102,9 +92,8 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
 
   const cx = Math.floor(w / 2);
-  const cy = Math.floor(h / 2);
 
-  /* central axis */
+  /* axis */
   ctx.strokeStyle = 'rgba(0,0,0,0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -112,11 +101,13 @@ function draw() {
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  trades.forEach(t => drawTrade(cx, cy + t.y, t.dir, t.hold, t.market));
+  const trades = getTrades(h);
+  trades.forEach(t => drawTrade(cx, t.y, t.dir, t.hold, t.market));
 }
 
 function drawTrade(cx, y, dir, hold, market) {
-  const gap = 10;        // horizontal separation
+  const gap = 12;
+
   const youX = cx - gap;
   const mktX = cx + gap;
 
@@ -142,6 +133,8 @@ function drawTrade(cx, y, dir, hold, market) {
   ctx.arc(cx, y, 3.5, 0, Math.PI * 2);
   ctx.fill();
 }
+
+resize();
 </script>
 
 </body>
