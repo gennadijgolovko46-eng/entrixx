@@ -1,115 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>ENTRIXX — Mirror v1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<title>ENTRIXX DEBUG</title>
 <style>
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #ffffff;
-  overflow: hidden;
+  background: red;
 }
 canvas {
+  width: 100%;
+  height: 100%;
   display: block;
-}
-#time {
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 13px;
-  color: #666;
-}
-#back {
-  position: fixed;
-  bottom: 18px;
-  right: 18px;
-  font-size: 13px;
-  color: #666;
-  text-decoration: none;
+  background: yellow;
 }
 </style>
 </head>
-
 <body>
 
 <canvas id="c"></canvas>
-<div id="time"></div>
-<a id="back" href="/">back</a>
 
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-const timeLabel = document.getElementById('time');
 
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  draw();
-}
-window.addEventListener('resize', resize);
-resize();
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-setInterval(() => {
-  timeLabel.textContent = new Date().toUTCString();
-}, 1000);
+/* BIG OBVIOUS SHAPES */
+ctx.fillStyle = 'black';
+ctx.fillRect(50, 50, 200, 200);
 
-/* ===== CLEAR TEST DATA ===== */
-const decisions = [
-  { y: 200, dir:  1, hold: 120, market: 180 },
-  { y: 400, dir: -1, hold: 100, market: 160 },
-  { y: 600, dir:  1, hold: 140, market: 90  }
-];
+ctx.strokeStyle = 'blue';
+ctx.lineWidth = 20;
+ctx.beginPath();
+ctx.moveTo(0, canvas.height / 2);
+ctx.lineTo(canvas.width, canvas.height / 2);
+ctx.stroke();
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const cx = Math.floor(canvas.width / 2);
-
-  /* AXIS — THICK & VISIBLE */
-  ctx.strokeStyle = '#ccc';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, canvas.height);
-  ctx.stroke();
-
-  decisions.forEach(d => drawDecision(cx, d.y, d.dir, d.hold, d.market));
-}
-
-function drawDecision(x, y, dir, holdLen, marketLen) {
-  const box = 10;
-  const gap = 8;
-  const offset = 10;
-  const sign = dir === 1 ? -1 : 1;
-
-  /* SQUARE */
-  ctx.fillStyle = '#000';
-  ctx.fillRect(x - box/2, y - box/2, box, box);
-
-  const startY = y + sign * (box/2 + gap);
-
-  /* HOLD — BLUE */
-  ctx.strokeStyle = '#1f5cff';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(x - offset, startY);
-  ctx.lineTo(x - offset, startY + sign * holdLen);
-  ctx.stroke();
-
-  /* MARKET — GREEN */
-  ctx.strokeStyle = '#18a060';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(x + offset, startY);
-  ctx.lineTo(x + offset, startY + sign * marketLen);
-  ctx.stroke();
-}
+ctx.fillStyle = 'white';
+ctx.font = '40px sans-serif';
+ctx.fillText('DEBUG VISIBLE', 60, canvas.height - 60);
 </script>
 
 </body>
