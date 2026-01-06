@@ -1,8 +1,11 @@
+import { createTimeMapper } from "./time.js";
+
 const canvas = document.getElementById("scene");
 const ctx = canvas.getContext("2d");
 
 let cssWidth = 0;
 let cssHeight = 0;
+let mapper = null;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -15,21 +18,27 @@ function resize() {
   canvas.height = cssHeight * dpr;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  mapper = createTimeMapper("2026-01-06", cssWidth, 16);
 }
 
 function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-  // ТЕСТ: две вертикальные линии
-  ctx.strokeStyle = "rgba(0,0,0,0.3)";
-  ctx.lineWidth = 1;
+  if (mapper) {
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.lineWidth = 1;
 
-  ctx.beginPath();
-  ctx.moveTo(16, 0);
-  ctx.lineTo(16, cssHeight);
-  ctx.moveTo(cssWidth - 16, 0);
-  ctx.lineTo(cssWidth - 16, cssHeight);
-  ctx.stroke();
+    const xStart = mapper.timeToX(mapper.dayStart);
+    const xEnd   = mapper.timeToX(mapper.dayEnd);
+
+    ctx.beginPath();
+    ctx.moveTo(xStart, 0);
+    ctx.lineTo(xStart, cssHeight);
+    ctx.moveTo(xEnd, 0);
+    ctx.lineTo(xEnd, cssHeight);
+    ctx.stroke();
+  }
 
   requestAnimationFrame(render);
 }
