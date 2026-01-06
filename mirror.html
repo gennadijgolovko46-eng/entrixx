@@ -9,116 +9,114 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #ffffff;
-  height: 100%;
-  overflow: hidden;
-  font-family: system-ui, sans-serif;
-}
-
-#wrap {
-  position: relative;
   width: 100%;
   height: 100%;
+  background: #ffffff;
+  overflow: hidden;
 }
 
 canvas {
-  position: absolute;
-  inset: 0;
+  display: block;
 }
 
 #back {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  font-size: 14px;
-  color: #999;
+  bottom: 18px;
+  right: 18px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: rgba(0,0,0,0.4);
+  text-decoration: none;
 }
 </style>
 </head>
 
 <body>
-<div id="wrap">
-  <canvas id="c"></canvas>
-</div>
-<div id="back">back</div>
+
+<canvas id="canvas"></canvas>
+<a id="back" href="/">back</a>
 
 <script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
 }
-window.addEventListener("resize", resize);
+
+window.addEventListener('resize', resize);
 resize();
 
-/* ===== CONFIG V1 ===== */
-const CENTER_X = canvas.width / 2;
-const SQUARE_SIZE = 6;
-const GAP_X = 6;
-const LINE_WIDTH = 2;
-
-/* ===== MOCK DATA (V1) =====
- direction:  1  = up
- direction: -1  = down
- hold: time tail
- market: market tail
-*/
-const events = [
-  { y: -120, direction:  1, hold: 40, market: 80 },
-  { y:    0, direction: -1, hold: 60, market: 30 },
-  { y:  140, direction:  1, hold: 30, market: 70 }
-];
-
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  ctx.clearRect(0, 0, w, h);
 
-  // center axis
-  ctx.strokeStyle = "#e0e0e0";
+  const centerX = Math.floor(w / 2);
+
+  /* axis */
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(canvas.width / 2, 0);
-  ctx.lineTo(canvas.width / 2, canvas.height);
+  ctx.moveTo(centerX, 0);
+  ctx.lineTo(centerX, h);
   ctx.stroke();
 
-  events.forEach(ev => {
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2 + ev.y;
+  const gap = 120;
+  const baseY = Math.floor(h / 2);
 
-    /* ===== SQUARE (ANCHOR) ===== */
-    ctx.fillStyle = "#000";
-    ctx.fillRect(
-      cx - SQUARE_SIZE / 2,
-      cy - SQUARE_SIZE / 2,
-      SQUARE_SIZE,
-      SQUARE_SIZE
-    );
+  const events = [
+    baseY - gap,
+    baseY,
+    baseY + gap
+  ];
 
-    /* ===== HOLD TAIL (BLUE) ===== */
-    ctx.strokeStyle = "#2f6fff";
-    ctx.lineWidth = LINE_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(cx - GAP_X, cy);
-    ctx.lineTo(
-      cx - GAP_X,
-      cy - ev.direction * ev.hold
-    );
-    ctx.stroke();
-
-    /* ===== MARKET TAIL (GREEN) ===== */
-    ctx.strokeStyle = "#1fa36b";
-    ctx.beginPath();
-    ctx.moveTo(cx + GAP_X, cy);
-    ctx.lineTo(
-      cx + GAP_X,
-      cy - ev.direction * ev.market
-    );
-    ctx.stroke();
-  });
+  events.forEach(y => drawEvent(centerX, y));
 }
 
-draw();
+function drawEvent(x, y) {
+  const squareSize = 8;
+  const tailGap = 6;
+
+  const holdLength = 60;   // upward
+  const marketLength = 90; // downward
+
+  /* square */
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(
+    x - squareSize / 2,
+    y - squareSize / 2,
+    squareSize,
+    squareSize
+  );
+
+  /* hold tail (up) */
+  ctx.strokeStyle = '#1e5bd7';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - squareSize / 2 - tailGap);
+  ctx.lineTo(x, y - squareSize / 2 - tailGap - holdLength);
+  ctx.stroke();
+
+  /* market tail (down) */
+  ctx.strokeStyle = '#1f9d55';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y + squareSize / 2 + tailGap);
+  ctx.lineTo(x, y + squareSize / 2 + tailGap + marketLength);
+  ctx.stroke();
+}
 </script>
+
 </body>
 </html>
