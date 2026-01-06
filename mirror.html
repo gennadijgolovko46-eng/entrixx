@@ -13,25 +13,24 @@ html, body {
   height: 100%;
   background: #ffffff;
   overflow: hidden;
-  font-family: system-ui, sans-serif;
 }
-canvas { display: block; }
-
+canvas {
+  display: block;
+}
 #time {
   position: fixed;
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 13px;
-  color: rgba(0,0,0,0.5);
+  color: #666;
 }
-
 #back {
   position: fixed;
   bottom: 18px;
   right: 18px;
   font-size: 13px;
-  color: rgba(0,0,0,0.4);
+  color: #666;
   text-decoration: none;
 }
 </style>
@@ -49,78 +48,66 @@ const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
 
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth;
-  const h = innerHeight;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
   draw();
 }
 window.addEventListener('resize', resize);
 resize();
 
-/* time */
 setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* ===== TEST DATA (INTENTIONALLY CLEAR) ===== */
+/* ===== CLEAR TEST DATA ===== */
 const decisions = [
-  { y: 0.28, dir:  1, hold: 90,  market: 140 },
-  { y: 0.50, dir: -1, hold: 80,  market: 120 },
-  { y: 0.72, dir:  1, hold: 130, market: 70  }
+  { y: 200, dir:  1, hold: 120, market: 180 },
+  { y: 400, dir: -1, hold: 100, market: 160 },
+  { y: 600, dir:  1, hold: 140, market: 90  }
 ];
 
-/* ===== DRAW ===== */
 function draw() {
-  const w = innerWidth;
-  const h = innerHeight;
-  ctx.clearRect(0,0,w,h);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const cx = w / 2;
+  const cx = Math.floor(canvas.width / 2);
 
-  /* axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.lineWidth = 1;
+  /* AXIS — THICK & VISIBLE */
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, h);
+  ctx.lineTo(cx, canvas.height);
   ctx.stroke();
 
-  decisions.forEach(d => {
-    drawDecision(cx, h * d.y, d.dir, d.hold, d.market);
-  });
+  decisions.forEach(d => drawDecision(cx, d.y, d.dir, d.hold, d.market));
 }
 
 function drawDecision(x, y, dir, holdLen, marketLen) {
-  const box = 8;          // square size
-  const gap = 6;          // distance from square to tails
-  const spacing = 7;      // distance between blue/green tails
+  const box = 10;
+  const gap = 8;
+  const offset = 10;
+  const sign = dir === 1 ? -1 : 1;
 
-  /* square (anchor) */
+  /* SQUARE */
   ctx.fillStyle = '#000';
   ctx.fillRect(x - box/2, y - box/2, box, box);
 
-  const startY = y + (dir === 1 ? -box/2 - gap : box/2 + gap);
-  const sign = dir === 1 ? -1 : 1;
+  const startY = y + sign * (box/2 + gap);
 
-  /* hold (blue) */
-  ctx.strokeStyle = '#2f6cff';
-  ctx.lineWidth = 2;
+  /* HOLD — BLUE */
+  ctx.strokeStyle = '#1f5cff';
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(x - spacing, startY);
-  ctx.lineTo(x - spacing, startY + sign * holdLen);
+  ctx.moveTo(x - offset, startY);
+  ctx.lineTo(x - offset, startY + sign * holdLen);
   ctx.stroke();
 
-  /* market (green) */
-  ctx.strokeStyle = '#1fa36b';
-  ctx.lineWidth = 2;
+  /* MARKET — GREEN */
+  ctx.strokeStyle = '#18a060';
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(x + spacing, startY);
-  ctx.lineTo(x + spacing, startY + sign * marketLen);
+  ctx.moveTo(x + offset, startY);
+  ctx.lineTo(x + offset, startY + sign * marketLen);
   ctx.stroke();
 }
 </script>
