@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>ENTRIXX — Mirror V1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  height: 100%;
   background: #fff;
   overflow: hidden;
 }
@@ -18,83 +21,120 @@ canvas {
 
 #back {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  font-size: 14px;
-  color: #888;
+  bottom: 18px;
+  right: 18px;
+  font-size: 13px;
+  color: rgba(0,0,0,0.4);
+  text-decoration: none;
+  font-family: system-ui, sans-serif;
 }
 </style>
 </head>
+
 <body>
 
 <canvas id="c"></canvas>
-<div id="back">back</div>
+<a id="back" href="/">back</a>
 
 <script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resize);
-resize();
+/* ===============================
+   ENTRIXX — MIRROR V1 (CLEAN)
+   =============================== */
 
 /* ===== CONFIG ===== */
-const CENTER_Y = canvas.height / 2;
-const STEP_X = 140;        // расстояние между сделками
-const SQUARE = 6;
-const TAIL_WIDTH = 1;
-const TAIL_GAP = 4;
+const SQUARE = 6;          // размер якоря
+const TAIL_WIDTH = 1;      // хвосты тонкие
+const TAIL_GAP = 5;        // зазор между хвостами
+const EVENT_GAP_Y = 80;    // расстояние между событиями
+const BASE_X = 120;        // старт по X
+const STEP_X = 200;        // шаг по X (временная ось)
 
-/* ===== DEMO DATA ===== */
-const data = [
-  { hold: 120, market: -60 },
-  { hold: -160, market: -40 },
-  { hold: 90, market: 130 },
-];
+/* ===== CANVAS ===== */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let DPR = 1;
+let W = 0;
+let H = 0;
+
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  W = document.documentElement.clientWidth;
+  H = document.documentElement.clientHeight;
+
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
 
 /* ===== DRAW ===== */
-ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-data.forEach((d, i) => {
-  const x = 120 + i * STEP_X;
-  const y = CENTER_Y;
+function drawEvent(x, y, hold, market) {
+  const tails = [];
 
-  // square (anchor)
+  if (hold !== 0) {
+    tails.push({ len: hold, color: '#2563eb' });   // синий
+  }
+  if (market !== 0) {
+    tails.push({ len: market, color: '#16a34a' }); // зелёный
+  }
+
+  drawTails(x, y, tails);
+
+  // якорь (квадрат)
   ctx.fillStyle = '#000';
   ctx.fillRect(
-    x - SQUARE / 2,
-    y - SQUARE / 2,
+    Math.round(x - SQUARE / 2),
+    Math.round(y - SQUARE / 2),
     SQUARE,
     SQUARE
   );
+}
 
-  // tails
-  let offsets = [];
+function drawTails(x, y, list) {
+  if (!list.length) return;
 
-  if (Math.sign(d.hold) === Math.sign(d.market)) {
-    offsets = [-TAIL_GAP / 2, TAIL_GAP / 2];
-  } else {
-    offsets = [0, 0];
-  }
+  const totalWidth =
+    list.length * TAIL_WIDTH +
+    (list.length - 1) * TAIL_GAP;
 
-  // hold (blue)
-  ctx.strokeStyle = '#1e6bff';
-  ctx.lineWidth = TAIL_WIDTH;
-  ctx.beginPath();
-  ctx.moveTo(x + offsets[0], y);
-  ctx.lineTo(x + offsets[0], y - d.hold);
-  ctx.stroke();
+  const startX = x - totalWidth / 2 + TAIL_WIDTH / 2;
 
-  // market (green)
-  ctx.strokeStyle = '#1a9c4a';
-  ctx.beginPath();
-  ctx.moveTo(x + offsets[1], y);
-  ctx.lineTo(x + offsets[1], y - d.market);
-  ctx.stroke();
-});
+  list.forEach((t, i) => {
+    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
+
+    ctx.strokeStyle = t.color;
+    ctx.lineWidth = TAIL_WIDTH;
+    ctx.lineCap = 'butt';
+
+    ctx.beginPath();
+    ctx.moveTo(tx, y);
+    ctx.lineTo(tx, y - t.len); // вверх / вниз по знаку
+    ctx.stroke();
+  });
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  const centerY = H / 2;
+
+  // DEMO события (временная ось слева направо)
+  drawEvent(BASE_X + STEP_X * 0, centerY - EVENT_GAP_Y,  90,  -60);
+  drawEvent(BASE_X + STEP_X * 1, centerY,               -120, -40);
+  drawEvent(BASE_X + STEP_X * 2, centerY + EVENT_GAP_Y,  80,  110);
+}
+
+/* ===== INIT ===== */
+function init() {
+  resize();
+  draw();
+}
+
+window.addEventListener('resize', init);
+requestAnimationFrame(init);
 </script>
 
 </body>
