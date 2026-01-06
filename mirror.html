@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>ENTRIXX — Mirror</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 html, body {
@@ -25,8 +25,8 @@ canvas {
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 14px;
-  color: rgba(0,0,0,0.55);
+  font-size: 13px;
+  color: rgba(0,0,0,0.5);
 }
 
 #back {
@@ -42,79 +42,74 @@ canvas {
 
 <body>
 
-<canvas id="c"></canvas>
+<canvas id="canvas"></canvas>
 <div id="time"></div>
 <a id="back" href="/">back</a>
 
 <script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-const timeLabel = document.getElementById('time');
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const timeLabel = document.getElementById("time");
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
   canvas.width = w * dpr;
   canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
 }
 
-window.addEventListener('resize', resize);
+window.addEventListener("resize", resize);
 resize();
 
+/* time */
 setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-const decisions = [
-  { y: 0.35, dir:  1, hold: 60, market: 110 },
-  { y: 0.50, dir: -1, hold: 80, market: 40  },
-  { y: 0.65, dir:  1, hold: 30, market: 70  }
-];
-
+/* draw */
 function draw() {
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
   ctx.clearRect(0, 0, w, h);
 
-  const cx = w / 2;
+  const cx = Math.round(w / 2);
+  const cy = Math.round(h / 2);
 
-  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  /* axis */
+  ctx.strokeStyle = "rgba(0,0,0,0.2)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  decisions.forEach(d => {
-    drawDecision(cx, h * d.y, d.dir, d.hold, d.market);
-  });
-}
-
-function drawDecision(x, y, dir, hold, market) {
-  const offset = 6;
-
-  ctx.fillStyle = '#000000';
+  /* node */
+  ctx.fillStyle = "#000";
   ctx.beginPath();
-  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#2f6bff';
+  /* holding time tail (blue) */
+  ctx.strokeStyle = "#2f6fed";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x - offset, y);
-  ctx.lineTo(x - offset, y + dir * hold);
+  ctx.moveTo(cx - 4, cy);
+  ctx.lineTo(cx - 4, cy - 120);
   ctx.stroke();
 
-  ctx.strokeStyle = '#2fa36b';
+  /* market tail (green) */
+  ctx.strokeStyle = "#2fa36b";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x + offset, y);
-  ctx.lineTo(x + offset, y + dir * market);
+  ctx.moveTo(cx + 4, cy);
+  ctx.lineTo(cx + 4, cy - 180);
   ctx.stroke();
 }
 </script>
