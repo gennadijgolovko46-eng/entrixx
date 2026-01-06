@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ENTRIXX — Mirror</title>
+<title>ENTRIXX — Mirror v1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -15,18 +15,15 @@ html, body {
   overflow: hidden;
   font-family: system-ui, sans-serif;
 }
-
-canvas {
-  display: block;
-}
+canvas { display: block; }
 
 #time {
   position: fixed;
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 14px;
-  color: rgba(0,0,0,0.55);
+  font-size: 13px;
+  color: rgba(0,0,0,0.5);
 }
 
 #back {
@@ -51,21 +48,17 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
 
-/* resize */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-
+  const w = innerWidth;
+  const h = innerHeight;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   draw();
 }
-
 window.addEventListener('resize', resize);
 resize();
 
@@ -74,59 +67,61 @@ setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* draw */
+/* ===== DATA (v1 test) ===== */
+const decisions = [
+  // direction: 1 = LONG, -1 = SHORT
+  { y: 0.3, dir:  1, hold: 80, market: 120 },
+  { y: 0.5, dir: -1, hold: 60, market: 40 },
+  { y: 0.7, dir:  1, hold: 100, market: 70 }
+];
+
+/* ===== DRAW ===== */
 function draw() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  ctx.clearRect(0, 0, w, h);
+  const w = innerWidth;
+  const h = innerHeight;
+  ctx.clearRect(0,0,w,h);
 
-  const cx = Math.round(w / 2);
+  const cx = w / 2;
 
-  /* central axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  /* axis */
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  /* demo decisions */
-  const decisions = [
-    { y: h / 2 - 120 },
-    { y: h / 2 },
-    { y: h / 2 + 120 }
-  ];
-
-  decisions.forEach(d => drawDecision(cx, d.y));
+  decisions.forEach(d => {
+    const y = h * d.y;
+    drawDecision(cx, y, d.dir, d.hold, d.market);
+  });
 }
 
-/* single decision primitive */
-function drawDecision(x, y) {
-  const gap = 6;
-  const hold = 90;
-  const market = 130;
-
-  /* market tail (green) */
-  ctx.strokeStyle = '#1fa463';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + gap, y - market);
-  ctx.lineTo(x + gap, y + market);
-  ctx.stroke();
-
-  /* hold tail (blue) */
-  ctx.strokeStyle = '#2f6fff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - gap, y - hold);
-  ctx.lineTo(x - gap, y + hold);
-  ctx.stroke();
-
-  /* decision point */
-  ctx.fillStyle = '#000000';
+function drawDecision(x, y, dir, holdLen, marketLen) {
+  /* point */
+  ctx.fillStyle = '#000';
   ctx.beginPath();
   ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.fill();
+
+  const offset = 6; // separation between tails
+  const sign = dir;
+
+  /* hold (blue) */
+  ctx.strokeStyle = '#2f6cff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - offset, y);
+  ctx.lineTo(x - offset, y - sign * holdLen);
+  ctx.stroke();
+
+  /* market (green) */
+  ctx.strokeStyle = '#1fa36b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + offset, y);
+  ctx.lineTo(x + offset, y - sign * marketLen);
+  ctx.stroke();
 }
 </script>
 
