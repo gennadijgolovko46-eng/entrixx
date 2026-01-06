@@ -1,34 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ENTRIXX</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      background: #fff;
-      font-family: system-ui, sans-serif;
+      overflow: hidden;
+      background: #ffffff;
     }
-    .center {
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    a {
-      color: #000;
-      text-decoration: none;
-      font-size: 18px;
+    canvas {
+      display: block;
     }
   </style>
 </head>
 <body>
-  <div class="center">
-    <a href="/mirror.html">ENTER MIRROR</a>
-  </div>
+  <canvas id="scene"></canvas>
+  <script src="main.js"></script>
 </body>
 </html>
