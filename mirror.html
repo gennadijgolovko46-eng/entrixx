@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>ENTRIXX — Mirror V1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 html, body {
@@ -11,7 +11,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #fff;
+  background: #ffffff;
   overflow: hidden;
 }
 
@@ -39,86 +39,44 @@ canvas {
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
-function resize() {
+const SQUARE = 8;
+const TAIL_WIDTH = 4;
+const TAIL_GAP = 6;
+const EVENT_GAP = 30;
+
+function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = document.documentElement.clientWidth;
+  const h = document.documentElement.clientHeight;
+
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  draw();
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-window.addEventListener('resize', resize);
-resize();
+function drawEvent(x, y, hold, market) {
+  const tailsUp = [];
+  const tailsDown = [];
 
-/* ===== CONFIG ===== */
-const CENTER_X = () => innerWidth / 2;
-const SQUARE = 8;
-const TAIL_WIDTH = 4;
-const TAIL_GAP = 6;
-const EVENT_GAP = 24;
+  if (hold > 0) tailsUp.push({ len: hold, color: '#2563eb' });
+  if (hold < 0) tailsDown.push({ len: hold, color: '#2563eb' });
 
-/* ===== DEMO DATA ===== */
-/*
-hold, market:
-positive  = up
-negative  = down
-*/
-const events = [
-  { hold: 80,  market: -120 },
-  { hold: -140, market: -60 },
-  { hold: 100, market: 90 }
-];
+  if (market > 0) tailsUp.push({ len: market, color: '#16a34a' });
+  if (market < 0) tailsDown.push({ len: market, color: '#16a34a' });
 
-function draw() {
-  ctx.clearRect(0,0,innerWidth,innerHeight);
+  drawTails(x, y, tailsUp, -1);
+  drawTails(x, y, tailsDown, 1);
 
-  let yCursor = 40;
-
-  for (const e of events) {
-    yCursor = drawEvent(CENTER_X(), yCursor, e) + EVENT_GAP;
-  }
-}
-
-function drawEvent(x, y, e) {
-  const tails = [];
-
-  if (e.hold !== 0) {
-    tails.push({ len: e.hold, color: '#2563eb' });
-  }
-
-  if (e.market !== 0) {
-    tails.push({ len: e.market, color: '#16a34a' });
-  }
-
-  const up = tails.filter(t => t.len > 0);
-  const down = tails.filter(t => t.len < 0);
-
-  const maxUp = up.length ? Math.max(...up.map(t => t.len)) : 0;
-  const maxDown = down.length ? Math.min(...down.map(t => t.len)) : 0;
-
-  const blockTop = y - maxUp;
-  const blockBottom = y - maxDown;
-
-  drawSquare(x, y);
-
-  drawTails(x, y, up, -1);
-  drawTails(x, y, down, 1);
-
-  return blockBottom;
-}
-
-function drawSquare(x, y) {
   ctx.fillStyle = '#000';
-  ctx.fillRect(
-    x - SQUARE / 2,
-    y - SQUARE / 2,
-    SQUARE,
-    SQUARE
-  );
+  ctx.fillRect(x - SQUARE / 2, y - SQUARE / 2, SQUARE, SQUARE);
+
+  const maxUp = tailsUp.length ? Math.max(...tailsUp.map(t => t.len)) : 0;
+  const maxDown = tailsDown.length ? Math.min(...tailsDown.map(t => t.len)) : 0;
+
+  return y + Math.max(Math.abs(maxUp), Math.abs(maxDown));
 }
 
 function drawTails(x, y, list, dir) {
@@ -126,7 +84,7 @@ function drawTails(x, y, list, dir) {
 
   list.forEach((t, i) => {
     const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
-    const ty = y + (dir === -1 ? -SQUARE / 2 : SQUARE / 2);
+    const ty = y + dir * (SQUARE / 2);
 
     ctx.strokeStyle = t.color;
     ctx.lineWidth = TAIL_WIDTH;
@@ -136,6 +94,29 @@ function drawTails(x, y, list, dir) {
     ctx.stroke();
   });
 }
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const centerX = canvas.width / (window.devicePixelRatio || 1) / 2;
+  let y = 80;
+
+  y = drawEvent(centerX, y, 120, -80) + EVENT_GAP;
+  y = drawEvent(centerX, y, -140, -60) + EVENT_GAP;
+  y = drawEvent(centerX, y, 90, 100);
+}
+
+function init() {
+  resizeCanvas();
+  draw();
+}
+
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  draw();
+});
+
+requestAnimationFrame(init);
 </script>
 
 </body>
