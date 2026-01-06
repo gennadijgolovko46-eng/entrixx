@@ -67,12 +67,11 @@ setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* ===== DATA (v1 test) ===== */
+/* ===== TEST DATA (INTENTIONALLY CLEAR) ===== */
 const decisions = [
-  // direction: 1 = LONG, -1 = SHORT
-  { y: 0.3, dir:  1, hold: 80, market: 120 },
-  { y: 0.5, dir: -1, hold: 60, market: 40 },
-  { y: 0.7, dir:  1, hold: 100, market: 70 }
+  { y: 0.28, dir:  1, hold: 90,  market: 140 },
+  { y: 0.50, dir: -1, hold: 80,  market: 120 },
+  { y: 0.72, dir:  1, hold: 130, market: 70  }
 ];
 
 /* ===== DRAW ===== */
@@ -92,35 +91,36 @@ function draw() {
   ctx.stroke();
 
   decisions.forEach(d => {
-    const y = h * d.y;
-    drawDecision(cx, y, d.dir, d.hold, d.market);
+    drawDecision(cx, h * d.y, d.dir, d.hold, d.market);
   });
 }
 
 function drawDecision(x, y, dir, holdLen, marketLen) {
-  /* point */
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(x, y, 4, 0, Math.PI * 2);
-  ctx.fill();
+  const box = 8;          // square size
+  const gap = 6;          // distance from square to tails
+  const spacing = 7;      // distance between blue/green tails
 
-  const offset = 6; // separation between tails
-  const sign = dir;
+  /* square (anchor) */
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x - box/2, y - box/2, box, box);
+
+  const startY = y + (dir === 1 ? -box/2 - gap : box/2 + gap);
+  const sign = dir === 1 ? -1 : 1;
 
   /* hold (blue) */
   ctx.strokeStyle = '#2f6cff';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x - offset, y);
-  ctx.lineTo(x - offset, y - sign * holdLen);
+  ctx.moveTo(x - spacing, startY);
+  ctx.lineTo(x - spacing, startY + sign * holdLen);
   ctx.stroke();
 
   /* market (green) */
   ctx.strokeStyle = '#1fa36b';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x + offset, y);
-  ctx.lineTo(x + offset, y - sign * marketLen);
+  ctx.moveTo(x + spacing, startY);
+  ctx.lineTo(x + spacing, startY + sign * marketLen);
   ctx.stroke();
 }
 </script>
