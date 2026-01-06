@@ -1,136 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ENTRIXX — Mirror</title>
+  <meta charset="UTF-8" />
+  <title>ENTRIXX — Mirror</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<style>
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: #ffffff;
-  overflow: hidden;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-}
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
 
-#wrap {
-  position: fixed;
-  inset: 0;
-}
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: block;
+    }
 
-canvas {
-  position: absolute;
-  inset: 0;
-}
+    #time {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 14px;
+      color: #000;
+      opacity: 0.7;
+      pointer-events: none;
+    }
 
-#center-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 1px;
-  background: rgba(0,0,0,0.12);
-}
-
-#time {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 14px;
-  color: #555;
-}
-
-#back {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  font-size: 14px;
-  color: #777;
-  cursor: pointer;
-}
-</style>
+    #back {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      font-size: 13px;
+      color: #000;
+      opacity: 0.4;
+      text-decoration: none;
+    }
+  </style>
 </head>
 
 <body>
 
-<div id="wrap">
-  <canvas id="layer"></canvas>
-  <div id="center-line"></div>
-  <div id="time"></div>
-  <div id="back" onclick="history.back()">back</div>
-</div>
+<canvas id="canvas"></canvas>
+<div id="time"></div>
+<a id="back" href="/">back</a>
 
 <script>
-const canvas = document.getElementById('layer');
-const ctx = canvas.getContext('2d');
-const timeEl = document.getElementById('time');
+/* ===============================
+   ENTRIXX — MIRROR (STABLE CORE)
+   =============================== */
 
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const timeLabel = document.getElementById('time');
+
+/* ===== RESIZE (MOBILE-SAFE) ===== */
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
 }
 
 window.addEventListener('resize', resize);
-resize();
+setTimeout(resize, 0);
 
+/* ===== TIME ===== */
 function updateTime() {
-  timeEl.textContent = new Date().toUTCString();
+  timeLabel.textContent = new Date().toUTCString();
 }
 setInterval(updateTime, 1000);
 updateTime();
 
-/*
-  ПРОТОТИП СДЕЛОК
-  y — смещение от центра
-  taken — хвост, который ты взял
-  missed — хвост, который рынок прошёл после
-*/
-const trades = [
-  { y: -40, taken: 30, missed: 80 },
-  { y: 20,  taken: -20, missed: -60 },
-  { y: 90,  taken: 15, missed: 120 }
-];
-
+/* ===== DRAW ===== */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const cx = w / 2;
 
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#000';
-  ctx.fillStyle = '#000';
+  /* central time marker */
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, 0);
+  ctx.lineTo(cx, h);
+  ctx.stroke();
 
-  trades.forEach(t => {
-    const y = cy + t.y;
+  /* demo data — deliberately minimal */
+  const points = [
+    { y: h/2 - 40, hold: 30, miss: -60 },
+    { y: h/2,       hold: 60, miss: 20  },
+    { y: h/2 + 50,  hold: 20, miss: -30 }
+  ];
 
-    // точка выхода
-    ctx.beginPath();
-    ctx.arc(cx, y, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // хвост, который ты взял
-    ctx.beginPath();
-    ctx.moveTo(cx, y);
-    ctx.lineTo(cx, y - t.taken);
-    ctx.stroke();
-
-    // хвост рынка (пунктир)
-    ctx.setLineDash([4, 6]);
-    ctx.beginPath();
-    ctx.moveTo(cx, y - t.taken);
-    ctx.lineTo(cx, y - t.missed);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  });
+  points.forEach(p => drawTrade(cx, p.y, p.hold, p.miss));
 }
 
-draw();
+/* ===== TRADE GEOMETRY ===== */
+function drawTrade(x, y, hold, miss) {
+  /* entry point */
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  /* HOLD tail — solid (what YOU did) */
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - hold);
+  ctx.stroke();
+
+  /* MISS tail — dashed (what MARKET did) */
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - miss);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
 </script>
 
 </body>
