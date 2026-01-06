@@ -47,10 +47,15 @@ canvas {
 <a id="back" href="/">back</a>
 
 <script>
+/* ===============================
+   ENTRIXX — MIRROR (TAIL LOGIC)
+   =============================== */
+
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
 
+/* ===== RESIZE ===== */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
@@ -64,22 +69,40 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
 }
-
 window.addEventListener('resize', resize);
 resize();
 
-/* time */
+/* ===== TIME ===== */
 setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* draw */
+/*
+  DATA MODEL
+  y        — vertical position
+  dir      — +1 long, -1 short
+  hold     — magnitude of holding (your action)
+  market   — magnitude of market move after exit
+*/
+const trades = [
+  // long, market continued
+  { y: -120, dir:  1, hold: 60, market: 120 },
+
+  // long, market reversed
+  { y:   0,  dir:  1, hold: 50, market: -80 },
+
+  // short, market continued
+  { y: 120,  dir: -1, hold: 70, market: -40 }
+];
+
+/* ===== DRAW ===== */
 function draw() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   ctx.clearRect(0, 0, w, h);
 
   const cx = Math.floor(w / 2);
+  const cy = Math.floor(h / 2);
 
   /* central axis */
   ctx.strokeStyle = 'rgba(0,0,0,0.18)';
@@ -89,39 +112,34 @@ function draw() {
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  /* sample trades */
-  const trades = [
-    { y: h/2 - 100, take: -50, miss: 80 },
-    { y: h/2,       take: -30, miss: 40 },
-    { y: h/2 + 100, take: -70, miss: 30 }
-  ];
-
-  trades.forEach(t => drawTrade(cx, t.y, t.take, t.miss));
+  trades.forEach(t => drawTrade(cx, cy + t.y, t.dir, t.hold, t.market));
 }
 
-function drawTrade(x, y, take, miss) {
-  /* taken (solid) */
-  ctx.strokeStyle = '#000';
+function drawTrade(cx, y, dir, hold, market) {
+  const gap = 10;        // horizontal separation
+  const youX = cx - gap;
+  const mktX = cx + gap;
+
+  /* YOU — holding time (blue) */
+  ctx.strokeStyle = '#2f6df6';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x, y + take);
+  ctx.moveTo(youX, y);
+  ctx.lineTo(youX, y - dir * hold);
   ctx.stroke();
 
-  /* missed (market continuation, dashed) */
-  ctx.setLineDash([6, 6]);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 1.5;
+  /* MARKET — after exit (green) */
+  ctx.strokeStyle = '#2aa876';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x, y + miss);
+  ctx.moveTo(mktX, y);
+  ctx.lineTo(mktX, y - market);
   ctx.stroke();
-  ctx.setLineDash([]);
 
   /* exit point */
   ctx.fillStyle = '#000';
   ctx.beginPath();
-  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+  ctx.arc(cx, y, 3.5, 0, Math.PI * 2);
   ctx.fill();
 }
 </script>
