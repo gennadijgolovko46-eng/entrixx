@@ -38,7 +38,7 @@
 
 <script>
 /* ===============================
-   ENTRIXX — MIRROR V1 (CLEAN)
+   ENTRIXX — MIRROR V1 (FIXED)
    =============================== */
 
 const canvas = document.getElementById('c');
@@ -46,12 +46,12 @@ const ctx = canvas.getContext('2d');
 
 /* ===== CONFIG ===== */
 const AXIS_COLOR   = 'rgba(0,0,0,0.15)';
-const HOLD_COLOR   = '#1f5cff'; // blue
-const MARKET_COLOR = '#2fa36b'; // green
+const HOLD_COLOR   = '#1f5cff';
+const MARKET_COLOR = '#2fa36b';
 
 const SQUARE_SIZE = 10;
 const TAIL_WIDTH  = 3;
-const TAIL_GAP    = 6;
+const TAIL_OFFSET = 6;
 
 /* ===== RESIZE ===== */
 function resize() {
@@ -80,7 +80,7 @@ function draw() {
 
   const cx = Math.floor(w / 2);
 
-  // vertical axis
+  // axis
   ctx.strokeStyle = AXIS_COLOR;
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -88,11 +88,10 @@ function draw() {
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  /* ===== MOCK EVENTS (V1) ===== */
   const events = [
-    { y: h/2 - 160, dir: -1, hold: 70,  market: 110 },
-    { y: h/2,       dir:  1, hold: 120, market: 60  },
-    { y: h/2 + 160, dir: -1, hold: 90,  market: 90  }
+    { y: h/2 - 160, dir: -1, hold: 80, market: 120 },
+    { y: h/2,       dir:  1, hold: 120, market: 80  },
+    { y: h/2 + 160, dir: -1, hold: 100, market: 100 }
   ];
 
   events.forEach(e =>
@@ -103,7 +102,7 @@ function draw() {
 /* ===== EVENT ===== */
 function drawEvent(cx, cy, dir, holdLen, marketLen) {
 
-  // square (anchor)
+  // anchor square
   ctx.fillStyle = '#000';
   ctx.fillRect(
     cx - SQUARE_SIZE / 2,
@@ -114,18 +113,20 @@ function drawEvent(cx, cy, dir, holdLen, marketLen) {
 
   ctx.lineWidth = TAIL_WIDTH;
 
-  // HOLD tail (left)
+  const edgeY = cy + dir * (SQUARE_SIZE / 2);
+
+  // HOLD
   ctx.strokeStyle = HOLD_COLOR;
   ctx.beginPath();
-  ctx.moveTo(cx - TAIL_GAP, cy);
-  ctx.lineTo(cx - TAIL_GAP, cy + dir * holdLen);
+  ctx.moveTo(cx - TAIL_OFFSET, edgeY);
+  ctx.lineTo(cx - TAIL_OFFSET, edgeY + dir * holdLen);
   ctx.stroke();
 
-  // MARKET tail (right)
+  // MARKET
   ctx.strokeStyle = MARKET_COLOR;
   ctx.beginPath();
-  ctx.moveTo(cx + TAIL_GAP, cy);
-  ctx.lineTo(cx + TAIL_GAP, cy + dir * marketLen);
+  ctx.moveTo(cx + TAIL_OFFSET, edgeY);
+  ctx.lineTo(cx + TAIL_OFFSET, edgeY + dir * marketLen);
   ctx.stroke();
 }
 </script>
