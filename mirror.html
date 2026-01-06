@@ -26,7 +26,6 @@ canvas {
   font-size: 13px;
   color: rgba(0,0,0,0.4);
   text-decoration: none;
-  font-family: system-ui, sans-serif;
 }
 </style>
 </head>
@@ -37,57 +36,47 @@ canvas {
 <a id="back" href="/">back</a>
 
 <script>
-/* ===============================
-   ENTRIXX — MIRROR V1 (CLEAN)
-   =============================== */
-
-/* ===== CONFIG ===== */
-const SQUARE = 6;          // размер якоря
-const TAIL_WIDTH = 1;      // хвосты тонкие
-const TAIL_GAP = 5;        // зазор между хвостами
-const EVENT_GAP_Y = 80;    // расстояние между событиями
-const BASE_X = 120;        // старт по X
-const STEP_X = 200;        // шаг по X (временная ось)
-
-/* ===== CANVAS ===== */
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-let DPR = 1;
-let W = 0;
-let H = 0;
 
+/* ===== VISUAL CONSTANTS ===== */
+const SQUARE = 5;        // уменьшили квадрат
+const TAIL_WIDTH = 1;    // хвосты тоньше
+const TAIL_GAP = 4;      // зазор между хвостами
+const EVENT_GAP_Y = 70;
+
+/* ===== CANVAS ===== */
 function resize() {
-  DPR = window.devicePixelRatio || 1;
-  W = document.documentElement.clientWidth;
-  H = document.documentElement.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const w = document.documentElement.clientWidth;
+  const h = document.documentElement.clientHeight;
 
-  canvas.width = W * DPR;
-  canvas.height = H * DPR;
-  canvas.style.width = W + 'px';
-  canvas.style.height = H + 'px';
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
 
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-/* ===== DRAW ===== */
-
+/* ===== DRAWING ===== */
 function drawEvent(x, y, hold, market) {
   const tails = [];
 
   if (hold !== 0) {
-    tails.push({ len: hold, color: '#2563eb' });   // синий
+    tails.push({ len: hold, color: '#2563eb' });   // blue
   }
   if (market !== 0) {
-    tails.push({ len: market, color: '#16a34a' }); // зелёный
+    tails.push({ len: market, color: '#16a34a' }); // green
   }
 
   drawTails(x, y, tails);
 
-  // якорь (квадрат)
+  // anchor square
   ctx.fillStyle = '#000';
   ctx.fillRect(
-    Math.round(x - SQUARE / 2),
-    Math.round(y - SQUARE / 2),
+    x - SQUARE / 2,
+    y - SQUARE / 2,
     SQUARE,
     SQUARE
   );
@@ -107,8 +96,6 @@ function drawTails(x, y, list) {
 
     ctx.strokeStyle = t.color;
     ctx.lineWidth = TAIL_WIDTH;
-    ctx.lineCap = 'butt';
-
     ctx.beginPath();
     ctx.moveTo(tx, y);
     ctx.lineTo(tx, y - t.len); // вверх / вниз по знаку
@@ -116,15 +103,16 @@ function drawTails(x, y, list) {
   });
 }
 
+/* ===== SCENE ===== */
 function draw() {
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const centerY = H / 2;
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  const baseY = h / 2;
 
-  // DEMO события (временная ось слева направо)
-  drawEvent(BASE_X + STEP_X * 0, centerY - EVENT_GAP_Y,  90,  -60);
-  drawEvent(BASE_X + STEP_X * 1, centerY,               -120, -40);
-  drawEvent(BASE_X + STEP_X * 2, centerY + EVENT_GAP_Y,  80,  110);
+  drawEvent(140, baseY - EVENT_GAP_Y, 120, -60);
+  drawEvent(340, baseY, -150, -40);
+  drawEvent(560, baseY + EVENT_GAP_Y, 90, 130);
 }
 
 /* ===== INIT ===== */
