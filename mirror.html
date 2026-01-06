@@ -51,10 +51,11 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
 
+/* resize */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
 
   canvas.width = w * dpr;
   canvas.height = h * dpr;
@@ -75,14 +76,13 @@ setInterval(() => {
 
 /* draw */
 function draw() {
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
   ctx.clearRect(0, 0, w, h);
 
-  const cx = w / 2;
-  const cy = h / 2;
+  const cx = Math.round(w / 2);
 
-  /* axis */
+  /* central axis */
   ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -90,51 +90,43 @@ function draw() {
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  drawDecision(cx, cy);
+  /* demo decisions */
+  const decisions = [
+    { y: h / 2 - 120 },
+    { y: h / 2 },
+    { y: h / 2 + 120 }
+  ];
+
+  decisions.forEach(d => drawDecision(cx, d.y));
 }
 
+/* single decision primitive */
 function drawDecision(x, y) {
-  const offset = 6;
-  const holdLen = 90;
-  const marketLen = 130;
+  const gap = 6;
+  const hold = 90;
+  const market = 130;
 
-  /* point */
-  ctx.fillStyle = '#000';
+  /* market tail (green) */
+  ctx.strokeStyle = '#1fa463';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + gap, y - market);
+  ctx.lineTo(x + gap, y + market);
+  ctx.stroke();
+
+  /* hold tail (blue) */
+  ctx.strokeStyle = '#2f6fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - gap, y - hold);
+  ctx.lineTo(x - gap, y + hold);
+  ctx.stroke();
+
+  /* decision point */
+  ctx.fillStyle = '#000000';
   ctx.beginPath();
   ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.fill();
-
-  /* UP — HOLD (blue) */
-  ctx.strokeStyle = '#2f6fff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - offset, y);
-  ctx.lineTo(x - offset, y - holdLen);
-  ctx.stroke();
-
-  /* UP — MARKET (green) */
-  ctx.strokeStyle = '#1fa463';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + offset, y);
-  ctx.lineTo(x + offset, y - marketLen);
-  ctx.stroke();
-
-  /* DOWN — HOLD (blue) */
-  ctx.strokeStyle = '#2f6fff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - offset, y);
-  ctx.lineTo(x - offset, y + holdLen);
-  ctx.stroke();
-
-  /* DOWN — MARKET (green) */
-  ctx.strokeStyle = '#1fa463';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + offset, y);
-  ctx.lineTo(x + offset, y + marketLen);
-  ctx.stroke();
 }
 </script>
 
