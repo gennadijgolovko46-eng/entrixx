@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>ENTRIXX — Mirror v1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<title>ENTRIXX — Mirror V1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 html, body {
@@ -13,7 +13,6 @@ html, body {
   height: 100%;
   background: #ffffff;
   overflow: hidden;
-  font-family: system-ui, sans-serif;
 }
 
 canvas {
@@ -22,17 +21,18 @@ canvas {
 
 #time {
   position: fixed;
-  bottom: 18px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 14px;
-  color: rgba(0,0,0,0.55);
+  font-size: 13px;
+  color: rgba(0,0,0,0.5);
+  font-family: system-ui, sans-serif;
 }
 
 #back {
   position: fixed;
-  bottom: 18px;
-  right: 18px;
+  bottom: 16px;
+  right: 16px;
   font-size: 13px;
   color: rgba(0,0,0,0.4);
   text-decoration: none;
@@ -42,13 +42,12 @@ canvas {
 
 <body>
 
-<canvas id="c"></canvas>
+<canvas id="canvas"></canvas>
 <div id="time"></div>
 <a id="back" href="/">back</a>
 
 <script>
-/* ===== CANVAS ===== */
-const canvas = document.getElementById('c');
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const timeLabel = document.getElementById('time');
 
@@ -69,31 +68,27 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ===== TIME ===== */
 setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* ===== DATA (v1 static) ===== */
-/*
-direction:  1  -> up
-direction: -1  -> down
-*/
+// ===== TEST DATA (V1) =====
 const trades = [
-  { yOffset: -120, direction:  1 },
-  { yOffset:   0, direction: -1 },
-  { yOffset:  120, direction:  1 }
+  { y: 200, hold: 120, market: 180 },
+  { y: 320, hold: -160, market: 90 },
+  { y: 440, hold: 100, market: -140 }
 ];
 
-/* ===== DRAW ===== */
+// ===== DRAW =====
 function draw() {
   const w = window.innerWidth;
   const h = window.innerHeight;
+
   ctx.clearRect(0, 0, w, h);
 
-  const cx = Math.floor(w / 2);
+  const cx = w / 2;
 
-  /* central axis */
+  // central axis
   ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -101,39 +96,33 @@ function draw() {
   ctx.lineTo(cx, h);
   ctx.stroke();
 
-  trades.forEach(t => drawTrade(cx, Math.floor(h / 2 + t.yOffset), t.direction));
+  trades.forEach(t => drawTrade(cx, t.y, t.hold, t.market));
 }
 
-function drawTrade(cx, cy, dir) {
-  const boxSize = 6;
-  const tailGap = 6;
+function drawTrade(x, y, hold, market) {
+  const size = 8;
 
-  const holdLen = 70 * dir;   // blue
-  const marketLen = 100 * dir; // green
-
-  /* anchor square */
+  // square (decision)
   ctx.fillStyle = '#000';
-  ctx.fillRect(
-    cx - boxSize / 2,
-    cy - boxSize / 2,
-    boxSize,
-    boxSize
-  );
+  ctx.fillRect(x - size / 2, y - size / 2, size, size);
 
-  /* hold tail (blue) */
-  ctx.strokeStyle = '#2563eb';
+  const offsetHold = -6;
+  const offsetMarket = 6;
+
+  // hold tail (blue)
+  ctx.strokeStyle = '#2f6cff';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(cx - tailGap, cy);
-  ctx.lineTo(cx - tailGap, cy - holdLen);
+  ctx.moveTo(x + offsetHold, y);
+  ctx.lineTo(x + offsetHold, y + hold);
   ctx.stroke();
 
-  /* market tail (green) */
-  ctx.strokeStyle = '#16a34a';
+  // market tail (green)
+  ctx.strokeStyle = '#2fa36b';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(cx + tailGap, cy);
-  ctx.lineTo(cx + tailGap, cy - marketLen);
+  ctx.moveTo(x + offsetMarket, y);
+  ctx.lineTo(x + offsetMarket, y + market);
   ctx.stroke();
 }
 </script>
