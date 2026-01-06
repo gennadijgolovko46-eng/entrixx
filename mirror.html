@@ -11,7 +11,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #ffffff;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -42,9 +42,9 @@ const ctx = canvas.getContext('2d');
 const SQUARE = 8;
 const TAIL_WIDTH = 4;
 const TAIL_GAP = 6;
-const EVENT_GAP = 30;
+const EVENT_GAP_Y = 26;
 
-function resizeCanvas() {
+function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = document.documentElement.clientWidth;
   const h = document.documentElement.clientHeight;
@@ -58,39 +58,42 @@ function resizeCanvas() {
 }
 
 function drawEvent(x, y, hold, market) {
-  const tailsUp = [];
-  const tailsDown = [];
+  const tails = [];
 
-  if (hold > 0) tailsUp.push({ len: hold, color: '#2563eb' });
-  if (hold < 0) tailsDown.push({ len: hold, color: '#2563eb' });
+  if (hold !== 0) {
+    tails.push({ len: hold, color: '#2563eb' });
+  }
+  if (market !== 0) {
+    tails.push({ len: market, color: '#16a34a' });
+  }
 
-  if (market > 0) tailsUp.push({ len: market, color: '#16a34a' });
-  if (market < 0) tailsDown.push({ len: market, color: '#16a34a' });
+  drawTails(x, y, tails);
 
-  drawTails(x, y, tailsUp, -1);
-  drawTails(x, y, tailsDown, 1);
-
+  // квадрат — якорь события
   ctx.fillStyle = '#000';
-  ctx.fillRect(x - SQUARE / 2, y - SQUARE / 2, SQUARE, SQUARE);
-
-  const maxUp = tailsUp.length ? Math.max(...tailsUp.map(t => t.len)) : 0;
-  const maxDown = tailsDown.length ? Math.min(...tailsDown.map(t => t.len)) : 0;
-
-  return y + Math.max(Math.abs(maxUp), Math.abs(maxDown));
+  ctx.fillRect(
+    x - SQUARE / 2,
+    y - SQUARE / 2,
+    SQUARE,
+    SQUARE
+  );
 }
 
-function drawTails(x, y, list, dir) {
-  const startX = x - ((list.length - 1) * (TAIL_WIDTH + TAIL_GAP)) / 2;
+function drawTails(x, y, list) {
+  const totalHeight =
+    list.length * TAIL_WIDTH +
+    (list.length - 1) * TAIL_GAP;
+
+  const startY = y - totalHeight / 2 + TAIL_WIDTH / 2;
 
   list.forEach((t, i) => {
-    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
-    const ty = y + dir * (SQUARE / 2);
+    const ty = startY + i * (TAIL_WIDTH + TAIL_GAP);
 
     ctx.strokeStyle = t.color;
     ctx.lineWidth = TAIL_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(tx, ty);
-    ctx.lineTo(tx, ty + t.len);
+    ctx.moveTo(x, ty);
+    ctx.lineTo(x + t.len, ty); // ← ГОРИЗОНТАЛЬНО
     ctx.stroke();
   });
 }
@@ -98,24 +101,25 @@ function drawTails(x, y, list, dir) {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const centerX = canvas.width / (window.devicePixelRatio || 1) / 2;
-  let y = 80;
+  const centerY = canvas.height / (window.devicePixelRatio || 1) / 2;
+  let y = centerY - EVENT_GAP_Y;
 
-  y = drawEvent(centerX, y, 120, -80) + EVENT_GAP;
-  y = drawEvent(centerX, y, -140, -60) + EVENT_GAP;
-  y = drawEvent(centerX, y, 90, 100);
+  // X = время
+  drawEvent(120, y, 140, -90);
+  y += EVENT_GAP_Y;
+
+  drawEvent(320, y, -160, -80);
+  y += EVENT_GAP_Y;
+
+  drawEvent(520, y, 120, 110);
 }
 
 function init() {
-  resizeCanvas();
+  resize();
   draw();
 }
 
-window.addEventListener('resize', () => {
-  resizeCanvas();
-  draw();
-});
-
+window.addEventListener('resize', init);
 requestAnimationFrame(init);
 </script>
 
