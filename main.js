@@ -50,7 +50,7 @@ function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   if (mapper) {
-    // ось времени
+    // ось времени (края дня)
     ctx.strokeStyle = "rgba(0,0,0,0.15)";
     ctx.lineWidth = 1;
 
@@ -64,12 +64,28 @@ function render() {
     ctx.lineTo(xEnd, cssHeight);
     ctx.stroke();
 
-    // ОДИН ТЕСТОВЫЙ АТОМ
-    const t = new Date("2026-01-06T12:00:00Z").getTime();
-    const x = mapper.timeToX(t);
-    const y = cssHeight / 2;
+    // НЕСКОЛЬКО ТЕСТОВЫХ АТОМОВ — плотность читается глазом
+    const times = [
+      "2026-01-06T09:10:00Z",
+      "2026-01-06T09:18:00Z",
+      "2026-01-06T09:40:00Z",
+      "2026-01-06T12:00:00Z",
+      "2026-01-06T12:01:30Z",
+      "2026-01-06T16:20:00Z"
+    ];
 
-    drawAtom(x, y, 80, 40);
+    times.forEach((iso, i) => {
+      const t = new Date(iso).getTime();
+      const x = mapper.timeToX(t);
+      const y = cssHeight / 2;
+
+      drawAtom(
+        x,
+        y,
+        40 + i * 10,   // HOLD
+        20 + i * 5     // MARKET
+      );
+    });
   }
 
   requestAnimationFrame(render);
