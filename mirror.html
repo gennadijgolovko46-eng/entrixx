@@ -42,70 +42,50 @@ canvas {
 
 <body>
 
-<canvas id="canvas"></canvas>
+<canvas id="c"></canvas>
 <div id="time"></div>
 <a id="back" href="/">back</a>
 
 <script>
-/* ===== SETUP ===== */
-const canvas = document.getElementById('canvas');
+const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
-function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  draw();
-}
+/* hard size — no resize magic */
+const W = window.innerWidth;
+const H = window.innerHeight;
+canvas.width = W;
+canvas.height = H;
 
-window.addEventListener('resize', resize);
-resize();
-
-/* ===== TIME ===== */
-const timeLabel = document.getElementById('time');
+/* time */
+document.getElementById('time').textContent = new Date().toUTCString();
 setInterval(() => {
-  timeLabel.textContent = new Date().toUTCString();
+  document.getElementById('time').textContent = new Date().toUTCString();
 }, 1000);
 
-/* ===== DEMO DATA ===== */
-/*
-direction:  1 = up (long)
-direction: -1 = down (short)
-*/
-const trades = [
-  { offsetY: -120, direction:  1, hold: 80, market: 120 },
-  { offsetY:    0, direction: -1, hold: 60, market: 90  },
-  { offsetY:  120, direction:  1, hold: 100, market: 70 }
-];
+/* draw immediately */
+draw();
 
-/* ===== DRAW ===== */
 function draw() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, W, H);
 
-  const cx = w / 2;
-  const cy = h / 2;
+  const cx = Math.floor(W / 2);
+  const cy = Math.floor(H / 2);
 
-  /* central axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  /* axis */
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, h);
+  ctx.lineTo(cx, H);
   ctx.stroke();
 
-  trades.forEach(t => {
-    drawTrade(cx, cy + t.offsetY, t.direction, t.hold, t.market);
-  });
+  /* demo trades */
+  trade(cx, cy - 120,  1, 80, 120);
+  trade(cx, cy,       -1, 60, 90);
+  trade(cx, cy + 120,  1, 100, 70);
 }
 
-function drawTrade(x, y, direction, holdLen, marketLen) {
+function trade(x, y, dir, hold, market) {
   const gap = 6;
 
   /* point */
@@ -114,20 +94,20 @@ function drawTrade(x, y, direction, holdLen, marketLen) {
   ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.fill();
 
-  /* hold tail (blue) */
+  /* hold (blue) */
   ctx.strokeStyle = '#2f6fff';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x - gap, y);
-  ctx.lineTo(x - gap, y - direction * holdLen);
+  ctx.lineTo(x - gap, y - dir * hold);
   ctx.stroke();
 
-  /* market tail (green) */
+  /* market (green) */
   ctx.strokeStyle = '#2fa36b';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x + gap, y);
-  ctx.lineTo(x + gap, y - direction * marketLen);
+  ctx.lineTo(x + gap, y - dir * market);
   ctx.stroke();
 }
 </script>
