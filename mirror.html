@@ -1,53 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>ENTRIXX — Mirror V1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8" />
+  <title>ENTRIXX — Mirror V1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<style>
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: #ffffff;
-  overflow: hidden;
-}
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
 
-canvas {
-  display: block;
-}
+    canvas {
+      display: block;
+    }
 
-#back {
-  position: fixed;
-  bottom: 18px;
-  right: 18px;
-  font-family: system-ui, sans-serif;
-  font-size: 13px;
-  color: rgba(0,0,0,0.4);
-  text-decoration: none;
-}
-</style>
+    #back {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      font-size: 14px;
+      color: #999;
+      cursor: pointer;
+      user-select: none;
+    }
+  </style>
 </head>
-
 <body>
 
-<canvas id="canvas"></canvas>
-<a id="back" href="/">back</a>
+<canvas id="c"></canvas>
+<div id="back" onclick="history.back()">back</div>
 
 <script>
-const canvas = document.getElementById('canvas');
+/* ===============================
+   ENTRIXX — MIRROR V1 (CLEAN)
+   =============================== */
+
+const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
+/* ===== CONFIG ===== */
+const AXIS_COLOR   = 'rgba(0,0,0,0.15)';
+const HOLD_COLOR   = '#1f5cff'; // blue
+const MARKET_COLOR = '#2fa36b'; // green
+
+const SQUARE_SIZE = 10;
+const TAIL_WIDTH  = 3;
+const TAIL_GAP    = 6;
+
+/* ===== RESIZE ===== */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
   const h = window.innerHeight;
 
-  canvas.width = w * dpr;
+  canvas.width  = w * dpr;
   canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
+  canvas.style.width  = w + 'px';
   canvas.style.height = h + 'px';
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -57,63 +71,61 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+/* ===== DRAW ===== */
 function draw() {
   const w = window.innerWidth;
   const h = window.innerHeight;
+
   ctx.clearRect(0, 0, w, h);
 
-  const centerX = Math.floor(w / 2);
+  const cx = Math.floor(w / 2);
 
-  /* axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  // vertical axis
+  ctx.strokeStyle = AXIS_COLOR;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(centerX, 0);
-  ctx.lineTo(centerX, h);
+  ctx.moveTo(cx, 0);
+  ctx.lineTo(cx, h);
   ctx.stroke();
 
-  const gap = 120;
-  const baseY = Math.floor(h / 2);
-
+  /* ===== MOCK EVENTS (V1) ===== */
   const events = [
-    baseY - gap,
-    baseY,
-    baseY + gap
+    { y: h/2 - 160, dir: -1, hold: 70,  market: 110 },
+    { y: h/2,       dir:  1, hold: 120, market: 60  },
+    { y: h/2 + 160, dir: -1, hold: 90,  market: 90  }
   ];
 
-  events.forEach(y => drawEvent(centerX, y));
+  events.forEach(e =>
+    drawEvent(cx, e.y, e.dir, e.hold, e.market)
+  );
 }
 
-function drawEvent(x, y) {
-  const squareSize = 8;
-  const tailGap = 6;
+/* ===== EVENT ===== */
+function drawEvent(cx, cy, dir, holdLen, marketLen) {
 
-  const holdLength = 60;   // upward
-  const marketLength = 90; // downward
-
-  /* square */
-  ctx.fillStyle = '#000000';
+  // square (anchor)
+  ctx.fillStyle = '#000';
   ctx.fillRect(
-    x - squareSize / 2,
-    y - squareSize / 2,
-    squareSize,
-    squareSize
+    cx - SQUARE_SIZE / 2,
+    cy - SQUARE_SIZE / 2,
+    SQUARE_SIZE,
+    SQUARE_SIZE
   );
 
-  /* hold tail (up) */
-  ctx.strokeStyle = '#1e5bd7';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = TAIL_WIDTH;
+
+  // HOLD tail (left)
+  ctx.strokeStyle = HOLD_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x, y - squareSize / 2 - tailGap);
-  ctx.lineTo(x, y - squareSize / 2 - tailGap - holdLength);
+  ctx.moveTo(cx - TAIL_GAP, cy);
+  ctx.lineTo(cx - TAIL_GAP, cy + dir * holdLen);
   ctx.stroke();
 
-  /* market tail (down) */
-  ctx.strokeStyle = '#1f9d55';
-  ctx.lineWidth = 2;
+  // MARKET tail (right)
+  ctx.strokeStyle = MARKET_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x, y + squareSize / 2 + tailGap);
-  ctx.lineTo(x, y + squareSize / 2 + tailGap + marketLength);
+  ctx.moveTo(cx + TAIL_GAP, cy);
+  ctx.lineTo(cx + TAIL_GAP, cy + dir * marketLen);
   ctx.stroke();
 }
 </script>
