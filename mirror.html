@@ -40,9 +40,9 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 /* ===== CONFIG ===== */
-const SQUARE_SIZE = 4;
-const TAIL_WIDTH  = 2;
-const TAIL_GAP    = 6;
+const SQUARE = 4;
+const TAIL_WIDTH = 2;
+const TAIL_OFFSET = 4;
 
 /* ===== RESIZE ===== */
 function resize() {
@@ -50,55 +50,44 @@ function resize() {
   const w = document.documentElement.clientWidth;
   const h = document.documentElement.clientHeight;
 
-  canvas.width  = w * dpr;
+  canvas.width = w * dpr;
   canvas.height = h * dpr;
-  canvas.style.width  = w + 'px';
+  canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-/* ===== DRAW TAILS ===== */
-function drawTails(x, y, tails) {
-  if (!tails.length) return;
-
-  const totalWidth =
-    tails.length * TAIL_WIDTH +
-    (tails.length - 1) * TAIL_GAP;
-
-  const startX = x - totalWidth / 2 + TAIL_WIDTH / 2;
-
-  tails.forEach((t, i) => {
-    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
-
-    ctx.strokeStyle = t.color;
-    ctx.lineWidth = TAIL_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(tx, y);
-    ctx.lineTo(tx, y - t.len); // вверх / вниз
-    ctx.stroke();
-  });
-}
-
 /* ===== DRAW EVENT ===== */
 function drawEvent(x, y, hold, market) {
-  const tails = [];
 
+  // HOLD (blue)
   if (hold !== 0) {
-    tails.push({ len: hold, color: '#2563eb' }); // синий — удержание
+    ctx.strokeStyle = '#2563eb';
+    ctx.lineWidth = TAIL_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(x - TAIL_OFFSET, y);
+    ctx.lineTo(x - TAIL_OFFSET, y - hold);
+    ctx.stroke();
   }
+
+  // MARKET (green)
   if (market !== 0) {
-    tails.push({ len: market, color: '#16a34a' }); // зелёный — рынок
+    ctx.strokeStyle = '#16a34a';
+    ctx.lineWidth = TAIL_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(x + TAIL_OFFSET, y);
+    ctx.lineTo(x + TAIL_OFFSET, y - market);
+    ctx.stroke();
   }
 
-  drawTails(x, y, tails);
-
+  // square (anchor)
   ctx.fillStyle = '#000';
   ctx.fillRect(
-    x - SQUARE_SIZE / 2,
-    y - SQUARE_SIZE / 2,
-    SQUARE_SIZE,
-    SQUARE_SIZE
+    x - SQUARE / 2,
+    y - SQUARE / 2,
+    SQUARE,
+    SQUARE
   );
 }
 
@@ -110,9 +99,9 @@ function draw() {
   const h = canvas.height / (window.devicePixelRatio || 1);
   const midY = h / 2;
 
-  drawEvent(140, midY - 120, 140, -60);
-  drawEvent(360, midY + 40, -180, -40);
-  drawEvent(580, midY - 20, 120, 160);
+  drawEvent(140, midY - 120, 160, -80);
+  drawEvent(360, midY + 40, -200, -40);
+  drawEvent(580, midY - 20, 120, 180);
 }
 
 /* ===== INIT ===== */
