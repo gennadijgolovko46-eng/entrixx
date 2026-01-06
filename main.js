@@ -25,7 +25,6 @@ function resize() {
 function drawAtom(x, y, hold, market) {
   const ATOM_SIZE = 6;
 
-  // atom core
   ctx.fillStyle = "#000";
   ctx.fillRect(
     x - ATOM_SIZE / 2,
@@ -36,14 +35,12 @@ function drawAtom(x, y, hold, market) {
 
   ctx.lineWidth = 1;
 
-  // hold tail (blue, left)
   ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x - 2, y);
   ctx.lineTo(x - 2, y - hold);
   ctx.stroke();
 
-  // market tail (green, right)
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + 2, y);
@@ -55,7 +52,6 @@ function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   if (mapper) {
-    // day boundaries
     ctx.strokeStyle = "rgba(0,0,0,0.15)";
     ctx.lineWidth = 1;
 
@@ -69,7 +65,6 @@ function render() {
     ctx.lineTo(xEnd, cssHeight);
     ctx.stroke();
 
-    // test atoms for density perception
     const times = [
       "2026-01-06T09:10:00Z",
       "2026-01-06T09:18:00Z",
@@ -82,7 +77,9 @@ function render() {
     times.forEach((iso, i) => {
       const t = new Date(iso).getTime();
       const x = mapper.timeToX(t);
-      const y = cssHeight / 2;
+
+      // small vertical separation to avoid overlap
+      const y = cssHeight / 2 + (i % 3) * 8;
 
       drawAtom(
         x,
