@@ -16,7 +16,9 @@ html, body {
   font-family: system-ui, sans-serif;
 }
 
-canvas { display: block; }
+canvas {
+  display: block;
+}
 
 #time {
   position: fixed;
@@ -24,7 +26,7 @@ canvas { display: block; }
   left: 50%;
   transform: translateX(-50%);
   font-size: 14px;
-  color: rgba(0,0,0,0.55);
+  color: rgba(0,0,0,0.5);
 }
 
 #back {
@@ -40,19 +42,19 @@ canvas { display: block; }
 
 <body>
 
-<canvas id="c"></canvas>
+<canvas id="canvas"></canvas>
 <div id="time"></div>
 <a id="back" href="/">back</a>
 
 <script>
-const canvas = document.getElementById('c');
+/* ===== CANVAS ===== */
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const timeLabel = document.getElementById('time');
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
@@ -60,34 +62,39 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
 }
+
 window.addEventListener('resize', resize);
 resize();
 
-/* time */
+/* ===== TIME ===== */
+const timeLabel = document.getElementById('time');
 setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* ===== DATA (пока тестовые) =====
-direction:  1 = LONG, -1 = SHORT
-hold:       length of blue tail
-market:     length of green tail
+/* ===== DATA (DEMO, ЖЁСТКО ЗАДАНО) ===== */
+/*
+direction:  1  = вверх
+direction: -1  = вниз
+length:     длина хвоста
 */
 const trades = [
-  { y: 0.4, direction:  1, hold: 70, market: 120 },
-  { y: 0.5, direction: -1, hold: 60, market: 100 },
-  { y: 0.6, direction:  1, hold: 40, market: 80 }
+  { y: -120, direction:  1, length: 90 },
+  { y:    0, direction: -1, length: 70 },
+  { y:  120, direction:  1, length: 110 }
 ];
 
+/* ===== DRAW ===== */
 function draw() {
-  const w = innerWidth;
-  const h = innerHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
   ctx.clearRect(0, 0, w, h);
 
   const cx = w / 2;
+  const cy = h / 2;
 
   /* central axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
@@ -95,43 +102,10 @@ function draw() {
   ctx.stroke();
 
   trades.forEach(t => {
-    drawTrade(
-      cx,
-      h * t.y,
-      t.direction,
-      t.hold,
-      t.market
-    );
+    const x = cx;
+    const y = cy + t.y;
+    drawTrade(x, y, t.direction, t.length);
   });
 }
 
-function drawTrade(x, y, dir, holdLen, marketLen) {
-  const gap = 6;               // separation between tails
-  const sign = dir;            // 1 up, -1 down
-
-  /* node */
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  /* hold tail (blue) */
-  ctx.strokeStyle = '#2f6fe4';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - gap, y);
-  ctx.lineTo(x - gap, y - sign * holdLen);
-  ctx.stroke();
-
-  /* market tail (green) */
-  ctx.strokeStyle = '#2fa36b';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + gap, y);
-  ctx.lineTo(x + gap, y - sign * marketLen);
-  ctx.stroke();
-}
-</script>
-
-</body>
-</html>
+function drawTrade(x, y, direction, length)
