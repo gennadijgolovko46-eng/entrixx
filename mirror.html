@@ -1,133 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>ENTRIXX — Mirror V1</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<title>ENTRIXX — Mirror V1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #ffffff;
-      overflow: hidden;
-      font-family: system-ui, -apple-system, sans-serif;
-    }
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  overflow: hidden;
+}
 
-    canvas {
-      display: block;
-    }
+canvas {
+  display: block;
+}
 
-    #back {
-      position: fixed;
-      right: 20px;
-      bottom: 20px;
-      font-size: 14px;
-      color: #999;
-      cursor: pointer;
-      user-select: none;
-    }
-  </style>
+#back {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  font-size: 13px;
+  color: rgba(0,0,0,0.4);
+  text-decoration: none;
+}
+</style>
 </head>
+
 <body>
 
 <canvas id="c"></canvas>
-<div id="back" onclick="history.back()">back</div>
+<a id="back" href="/">back</a>
 
 <script>
-/* ===============================
-   ENTRIXX — MIRROR V1 (FIXED)
-   =============================== */
-
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
-/* ===== CONFIG ===== */
-const AXIS_COLOR   = 'rgba(0,0,0,0.15)';
-const HOLD_COLOR   = '#1f5cff';
-const MARKET_COLOR = '#2fa36b';
-
-const SQUARE_SIZE = 10;
-const TAIL_WIDTH  = 3;
-const TAIL_OFFSET = 6;
-
-/* ===== RESIZE ===== */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-
-  canvas.width  = w * dpr;
+  const w = innerWidth;
+  const h = innerHeight;
+  canvas.width = w * dpr;
   canvas.height = h * dpr;
-  canvas.style.width  = w + 'px';
+  canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   draw();
 }
 
 window.addEventListener('resize', resize);
 resize();
 
-/* ===== DRAW ===== */
+/* ===== CONFIG ===== */
+const CENTER_X = () => innerWidth / 2;
+const SQUARE = 8;
+const TAIL_WIDTH = 4;
+const TAIL_GAP = 6;
+const EVENT_GAP = 24;
+
+/* ===== DEMO DATA ===== */
+/*
+hold, market:
+positive  = up
+negative  = down
+*/
+const events = [
+  { hold: 80,  market: -120 },
+  { hold: -140, market: -60 },
+  { hold: 100, market: 90 }
+];
+
 function draw() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  ctx.clearRect(0,0,innerWidth,innerHeight);
 
-  ctx.clearRect(0, 0, w, h);
+  let yCursor = 40;
 
-  const cx = Math.floor(w / 2);
+  for (const e of events) {
+    yCursor = drawEvent(CENTER_X(), yCursor, e) + EVENT_GAP;
+  }
+}
 
-  // axis
-  ctx.strokeStyle = AXIS_COLOR;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, h);
-  ctx.stroke();
+function drawEvent(x, y, e) {
+  const tails = [];
 
-  const events = [
-    { y: h/2 - 160, dir: -1, hold: 80, market: 120 },
-    { y: h/2,       dir:  1, hold: 120, market: 80  },
-    { y: h/2 + 160, dir: -1, hold: 100, market: 100 }
-  ];
+  if (e.hold !== 0) {
+    tails.push({ len: e.hold, color: '#2563eb' });
+  }
 
-  events.forEach(e =>
-    drawEvent(cx, e.y, e.dir, e.hold, e.market)
+  if (e.market !== 0) {
+    tails.push({ len: e.market, color: '#16a34a' });
+  }
+
+  const up = tails.filter(t => t.len > 0);
+  const down = tails.filter(t => t.len < 0);
+
+  const maxUp = up.length ? Math.max(...up.map(t => t.len)) : 0;
+  const maxDown = down.length ? Math.min(...down.map(t => t.len)) : 0;
+
+  const blockTop = y - maxUp;
+  const blockBottom = y - maxDown;
+
+  drawSquare(x, y);
+
+  drawTails(x, y, up, -1);
+  drawTails(x, y, down, 1);
+
+  return blockBottom;
+}
+
+function drawSquare(x, y) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(
+    x - SQUARE / 2,
+    y - SQUARE / 2,
+    SQUARE,
+    SQUARE
   );
 }
 
-/* ===== EVENT ===== */
-function drawEvent(cx, cy, dir, holdLen, marketLen) {
+function drawTails(x, y, list, dir) {
+  const startX = x - ((list.length - 1) * (TAIL_WIDTH + TAIL_GAP)) / 2;
 
-  // anchor square
-  ctx.fillStyle = '#000';
-  ctx.fillRect(
-    cx - SQUARE_SIZE / 2,
-    cy - SQUARE_SIZE / 2,
-    SQUARE_SIZE,
-    SQUARE_SIZE
-  );
+  list.forEach((t, i) => {
+    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
+    const ty = y + (dir === -1 ? -SQUARE / 2 : SQUARE / 2);
 
-  ctx.lineWidth = TAIL_WIDTH;
-
-  const edgeY = cy + dir * (SQUARE_SIZE / 2);
-
-  // HOLD
-  ctx.strokeStyle = HOLD_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(cx - TAIL_OFFSET, edgeY);
-  ctx.lineTo(cx - TAIL_OFFSET, edgeY + dir * holdLen);
-  ctx.stroke();
-
-  // MARKET
-  ctx.strokeStyle = MARKET_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(cx + TAIL_OFFSET, edgeY);
-  ctx.lineTo(cx + TAIL_OFFSET, edgeY + dir * marketLen);
-  ctx.stroke();
+    ctx.strokeStyle = t.color;
+    ctx.lineWidth = TAIL_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx, ty + t.len);
+    ctx.stroke();
+  });
 }
 </script>
 
