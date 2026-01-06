@@ -47,7 +47,7 @@ canvas {
 <a id="back" href="/">back</a>
 
 <script>
-/* ===== CANVAS ===== */
+/* ===== SETUP ===== */
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
@@ -72,16 +72,15 @@ setInterval(() => {
   timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* ===== DATA (DEMO, ЖЁСТКО ЗАДАНО) ===== */
+/* ===== DEMO DATA ===== */
 /*
-direction:  1  = вверх
-direction: -1  = вниз
-length:     длина хвоста
+direction:  1 = up (long)
+direction: -1 = down (short)
 */
 const trades = [
-  { y: -120, direction:  1, length: 90 },
-  { y:    0, direction: -1, length: 70 },
-  { y:  120, direction:  1, length: 110 }
+  { offsetY: -120, direction:  1, hold: 80, market: 120 },
+  { offsetY:    0, direction: -1, hold: 60, market: 90  },
+  { offsetY:  120, direction:  1, hold: 100, market: 70 }
 ];
 
 /* ===== DRAW ===== */
@@ -102,10 +101,36 @@ function draw() {
   ctx.stroke();
 
   trades.forEach(t => {
-    const x = cx;
-    const y = cy + t.y;
-    drawTrade(x, y, t.direction, t.length);
+    drawTrade(cx, cy + t.offsetY, t.direction, t.hold, t.market);
   });
 }
 
-function drawTrade(x, y, direction, length)
+function drawTrade(x, y, direction, holdLen, marketLen) {
+  const gap = 6;
+
+  /* point */
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  /* hold tail (blue) */
+  ctx.strokeStyle = '#2f6fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - gap, y);
+  ctx.lineTo(x - gap, y - direction * holdLen);
+  ctx.stroke();
+
+  /* market tail (green) */
+  ctx.strokeStyle = '#2fa36b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + gap, y);
+  ctx.lineTo(x + gap, y - direction * marketLen);
+  ctx.stroke();
+}
+</script>
+
+</body>
+</html>
