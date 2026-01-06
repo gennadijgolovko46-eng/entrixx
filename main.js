@@ -23,22 +23,27 @@ function resize() {
 }
 
 function drawAtom(x, y, hold, market) {
-  const ATOM = 6;
+  const ATOM_SIZE = 6;
 
-  // атом
+  // atom core
   ctx.fillStyle = "#000";
-  ctx.fillRect(x - ATOM / 2, y - ATOM / 2, ATOM, ATOM);
+  ctx.fillRect(
+    x - ATOM_SIZE / 2,
+    y - ATOM_SIZE / 2,
+    ATOM_SIZE,
+    ATOM_SIZE
+  );
 
   ctx.lineWidth = 1;
 
-  // HOLD — синий (левее)
+  // hold tail (blue, left)
   ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x - 2, y);
   ctx.lineTo(x - 2, y - hold);
   ctx.stroke();
 
-  // MARKET — зелёный (правее)
+  // market tail (green, right)
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + 2, y);
@@ -50,7 +55,7 @@ function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   if (mapper) {
-    // ось времени (края дня)
+    // day boundaries
     ctx.strokeStyle = "rgba(0,0,0,0.15)";
     ctx.lineWidth = 1;
 
@@ -64,7 +69,7 @@ function render() {
     ctx.lineTo(xEnd, cssHeight);
     ctx.stroke();
 
-    // НЕСКОЛЬКО ТЕСТОВЫХ АТОМОВ — плотность читается глазом
+    // test atoms for density perception
     const times = [
       "2026-01-06T09:10:00Z",
       "2026-01-06T09:18:00Z",
@@ -82,8 +87,8 @@ function render() {
       drawAtom(
         x,
         y,
-        40 + i * 10,   // HOLD
-        20 + i * 5     // MARKET
+        40 + i * 10,
+        20 + i * 5
       );
     });
   }
