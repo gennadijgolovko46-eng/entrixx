@@ -11,7 +11,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #ffffff;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -39,12 +39,13 @@ canvas {
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
-/* ===== CONFIG ===== */
-const SQUARE = 4;
-const TAIL_WIDTH = 2;
-const TAIL_OFFSET = 4;
+/* ===== VISUAL CONSTANTS ===== */
+const SQUARE = 5;        // уменьшили квадрат
+const TAIL_WIDTH = 1;    // хвосты тоньше
+const TAIL_GAP = 4;      // зазор между хвостами
+const EVENT_GAP_Y = 70;
 
-/* ===== RESIZE ===== */
+/* ===== CANVAS ===== */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = document.documentElement.clientWidth;
@@ -58,30 +59,20 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-/* ===== DRAW EVENT ===== */
+/* ===== DRAWING ===== */
 function drawEvent(x, y, hold, market) {
+  const tails = [];
 
-  // HOLD (blue)
   if (hold !== 0) {
-    ctx.strokeStyle = '#2563eb';
-    ctx.lineWidth = TAIL_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(x - TAIL_OFFSET, y);
-    ctx.lineTo(x - TAIL_OFFSET, y - hold);
-    ctx.stroke();
+    tails.push({ len: hold, color: '#2563eb' });   // blue
   }
-
-  // MARKET (green)
   if (market !== 0) {
-    ctx.strokeStyle = '#16a34a';
-    ctx.lineWidth = TAIL_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(x + TAIL_OFFSET, y);
-    ctx.lineTo(x + TAIL_OFFSET, y - market);
-    ctx.stroke();
+    tails.push({ len: market, color: '#16a34a' }); // green
   }
 
-  // square (anchor)
+  drawTails(x, y, tails);
+
+  // anchor square
   ctx.fillStyle = '#000';
   ctx.fillRect(
     x - SQUARE / 2,
@@ -91,17 +82,37 @@ function drawEvent(x, y, hold, market) {
   );
 }
 
-/* ===== DRAW ===== */
+function drawTails(x, y, list) {
+  if (!list.length) return;
+
+  const totalWidth =
+    list.length * TAIL_WIDTH +
+    (list.length - 1) * TAIL_GAP;
+
+  const startX = x - totalWidth / 2 + TAIL_WIDTH / 2;
+
+  list.forEach((t, i) => {
+    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
+
+    ctx.strokeStyle = t.color;
+    ctx.lineWidth = TAIL_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(tx, y);
+    ctx.lineTo(tx, y - t.len); // вверх / вниз по знаку
+    ctx.stroke();
+  });
+}
+
+/* ===== SCENE ===== */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const w = canvas.width / (window.devicePixelRatio || 1);
   const h = canvas.height / (window.devicePixelRatio || 1);
-  const midY = h / 2;
+  const baseY = h / 2;
 
-  drawEvent(140, midY - 120, 160, -80);
-  drawEvent(360, midY + 40, -200, -40);
-  drawEvent(580, midY - 20, 120, 180);
+  drawEvent(140, baseY - EVENT_GAP_Y, 120, -60);
+  drawEvent(340, baseY, -150, -40);
+  drawEvent(560, baseY + EVENT_GAP_Y, 90, 130);
 }
 
 /* ===== INIT ===== */
