@@ -21,6 +21,11 @@ html, body {
   inset: 0;
 }
 
+canvas {
+  position: absolute;
+  inset: 0;
+}
+
 #center-line {
   position: absolute;
   top: 0;
@@ -53,21 +58,79 @@ html, body {
 <body>
 
 <div id="wrap">
+  <canvas id="layer"></canvas>
   <div id="center-line"></div>
   <div id="time"></div>
   <div id="back" onclick="history.back()">back</div>
 </div>
 
 <script>
+const canvas = document.getElementById('layer');
+const ctx = canvas.getContext('2d');
 const timeEl = document.getElementById('time');
 
-function updateTime() {
-  const now = new Date();
-  timeEl.textContent = now.toUTCString();
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  draw();
 }
 
-updateTime();
+window.addEventListener('resize', resize);
+resize();
+
+function updateTime() {
+  timeEl.textContent = new Date().toUTCString();
+}
 setInterval(updateTime, 1000);
+updateTime();
+
+/*
+  ПРОТОТИП СДЕЛОК
+  y — смещение от центра
+  taken — хвост, который ты взял
+  missed — хвост, который рынок прошёл после
+*/
+const trades = [
+  { y: -40, taken: 30, missed: 80 },
+  { y: 20,  taken: -20, missed: -60 },
+  { y: 90,  taken: 15, missed: 120 }
+];
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#000';
+  ctx.fillStyle = '#000';
+
+  trades.forEach(t => {
+    const y = cy + t.y;
+
+    // точка выхода
+    ctx.beginPath();
+    ctx.arc(cx, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // хвост, который ты взял
+    ctx.beginPath();
+    ctx.moveTo(cx, y);
+    ctx.lineTo(cx, y - t.taken);
+    ctx.stroke();
+
+    // хвост рынка (пунктир)
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(cx, y - t.taken);
+    ctx.lineTo(cx, y - t.missed);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+}
+
+draw();
 </script>
 
 </body>
