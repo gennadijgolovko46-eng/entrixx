@@ -40,9 +40,9 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 const SQUARE = 8;
-const TAIL_WIDTH = 4;
-const TAIL_GAP = 6;
-const EVENT_GAP_Y = 26;
+const TAIL_WIDTH = 2;        // ← ТОНЬШЕ
+const TAIL_GAP = 5;
+const EVENT_GAP_Y = 60;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -69,7 +69,7 @@ function drawEvent(x, y, hold, market) {
 
   drawTails(x, y, tails);
 
-  // квадрат — якорь события
+  // квадрат — якорь
   ctx.fillStyle = '#000';
   ctx.fillRect(
     x - SQUARE / 2,
@@ -80,20 +80,20 @@ function drawEvent(x, y, hold, market) {
 }
 
 function drawTails(x, y, list) {
-  const totalHeight =
+  const totalWidth =
     list.length * TAIL_WIDTH +
     (list.length - 1) * TAIL_GAP;
 
-  const startY = y - totalHeight / 2 + TAIL_WIDTH / 2;
+  const startX = x - totalWidth / 2 + TAIL_WIDTH / 2;
 
   list.forEach((t, i) => {
-    const ty = startY + i * (TAIL_WIDTH + TAIL_GAP);
+    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
 
     ctx.strokeStyle = t.color;
     ctx.lineWidth = TAIL_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(x, ty);
-    ctx.lineTo(x + t.len, ty); // ← ГОРИЗОНТАЛЬНО
+    ctx.moveTo(tx, y);
+    ctx.lineTo(tx, y - t.len); // ↑ ВВЕРХ / ↓ ВНИЗ
     ctx.stroke();
   });
 }
@@ -101,17 +101,12 @@ function drawTails(x, y, list) {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const centerY = canvas.height / (window.devicePixelRatio || 1) / 2;
-  let y = centerY - EVENT_GAP_Y;
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  const baseY = h / 2;
 
-  // X = время
-  drawEvent(120, y, 140, -90);
-  y += EVENT_GAP_Y;
-
-  drawEvent(320, y, -160, -80);
-  y += EVENT_GAP_Y;
-
-  drawEvent(520, y, 120, 110);
+  drawEvent(120, baseY - EVENT_GAP_Y, 90, -60);
+  drawEvent(320, baseY, -120, -40);
+  drawEvent(520, baseY + EVENT_GAP_Y, 80, 110);
 }
 
 function init() {
