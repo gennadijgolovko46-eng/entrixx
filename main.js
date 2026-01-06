@@ -22,11 +22,36 @@ function resize() {
   mapper = createTimeMapper("2026-01-06", cssWidth, 16);
 }
 
+function drawAtom(x, y, hold, market) {
+  const ATOM = 6;
+
+  // атом
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x - ATOM / 2, y - ATOM / 2, ATOM, ATOM);
+
+  ctx.lineWidth = 1;
+
+  // HOLD — синий (левее)
+  ctx.strokeStyle = "#2F6BFF";
+  ctx.beginPath();
+  ctx.moveTo(x - 2, y);
+  ctx.lineTo(x - 2, y - hold);
+  ctx.stroke();
+
+  // MARKET — зелёный (правее)
+  ctx.strokeStyle = "#2DBE60";
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y);
+  ctx.lineTo(x + 2, y - market);
+  ctx.stroke();
+}
+
 function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   if (mapper) {
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    // ось времени
+    ctx.strokeStyle = "rgba(0,0,0,0.15)";
     ctx.lineWidth = 1;
 
     const xStart = mapper.timeToX(mapper.dayStart);
@@ -38,6 +63,13 @@ function render() {
     ctx.moveTo(xEnd, 0);
     ctx.lineTo(xEnd, cssHeight);
     ctx.stroke();
+
+    // ОДИН ТЕСТОВЫЙ АТОМ
+    const t = new Date("2026-01-06T12:00:00Z").getTime();
+    const x = mapper.timeToX(t);
+    const y = cssHeight / 2;
+
+    drawAtom(x, y, 80, 40);
   }
 
   requestAnimationFrame(render);
