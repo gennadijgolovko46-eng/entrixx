@@ -26,7 +26,7 @@ canvas {
   left: 50%;
   transform: translateX(-50%);
   font-size: 14px;
-  color: rgba(0,0,0,0.5);
+  color: rgba(0,0,0,0.55);
 }
 
 #back {
@@ -49,44 +49,54 @@ canvas {
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const timeLabel = document.getElementById('time');
 
-/* hard size — no resize magic */
-const W = window.innerWidth;
-const H = window.innerHeight;
-canvas.width = W;
-canvas.height = H;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = innerWidth;
+  const h = innerHeight;
+
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+window.addEventListener('resize', resize);
+resize();
 
 /* time */
-document.getElementById('time').textContent = new Date().toUTCString();
 setInterval(() => {
-  document.getElementById('time').textContent = new Date().toUTCString();
+  timeLabel.textContent = new Date().toUTCString();
 }, 1000);
 
-/* draw immediately */
-draw();
-
+/* draw */
 function draw() {
-  ctx.clearRect(0, 0, W, H);
+  const w = innerWidth;
+  const h = innerHeight;
+  ctx.clearRect(0, 0, w, h);
 
-  const cx = Math.floor(W / 2);
-  const cy = Math.floor(H / 2);
+  const cx = w / 2;
+  const cy = h / 2;
 
   /* axis */
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, H);
+  ctx.lineTo(cx, h);
   ctx.stroke();
 
-  /* demo trades */
-  trade(cx, cy - 120,  1, 80, 120);
-  trade(cx, cy,       -1, 60, 90);
-  trade(cx, cy + 120,  1, 100, 70);
+  drawDecision(cx, cy);
 }
 
-function trade(x, y, dir, hold, market) {
-  const gap = 6;
+function drawDecision(x, y) {
+  const offset = 6;
+  const holdLen = 90;
+  const marketLen = 130;
 
   /* point */
   ctx.fillStyle = '#000';
@@ -94,20 +104,36 @@ function trade(x, y, dir, hold, market) {
   ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.fill();
 
-  /* hold (blue) */
+  /* UP — HOLD (blue) */
   ctx.strokeStyle = '#2f6fff';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x - gap, y);
-  ctx.lineTo(x - gap, y - dir * hold);
+  ctx.moveTo(x - offset, y);
+  ctx.lineTo(x - offset, y - holdLen);
   ctx.stroke();
 
-  /* market (green) */
-  ctx.strokeStyle = '#2fa36b';
+  /* UP — MARKET (green) */
+  ctx.strokeStyle = '#1fa463';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x + gap, y);
-  ctx.lineTo(x + gap, y - dir * market);
+  ctx.moveTo(x + offset, y);
+  ctx.lineTo(x + offset, y - marketLen);
+  ctx.stroke();
+
+  /* DOWN — HOLD (blue) */
+  ctx.strokeStyle = '#2f6fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - offset, y);
+  ctx.lineTo(x - offset, y + holdLen);
+  ctx.stroke();
+
+  /* DOWN — MARKET (green) */
+  ctx.strokeStyle = '#1fa463';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + offset, y);
+  ctx.lineTo(x + offset, y + marketLen);
   ctx.stroke();
 }
 </script>
