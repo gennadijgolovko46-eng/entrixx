@@ -1,53 +1,43 @@
 /* ===============================
-   ENTRIXX — DENSITY LAYER
+   ENTRIXX — DENSITY LAYER (SAFE)
    =============================== */
 
 /*
-Rules:
-- Density is background-only
-- No global canvas state pollution
-- Drawn BEFORE behavior and atoms
-- No numbers, no thresholds
-- Breaks on -2 implicitly by gaps
+  This file is intentionally minimal.
+  Goal:
+  - Do NOT break rendering
+  - Do NOT depend on data
+  - Prepare hook for future density logic
 */
 
-export function drawDensity(ctx, atoms) {
-  if (!ctx || !atoms || atoms.length < 2) return;
+/* ===== GUARD ===== */
+(function () {
+  try {
 
-  ctx.save();
-
-  ctx.lineWidth = 1.2;
-  ctx.strokeStyle = "rgba(0,0,0,0.12)";
-  ctx.lineCap = "round";
-
-  ctx.beginPath();
-
-  let prev = null;
-
-  for (let i = 0; i < atoms.length; i++) {
-    const a = atoms[i];
-
-    // Skip invalid atoms
-    if (!a || typeof a.x !== "number" || typeof a.y !== "number") {
-      prev = null;
-      continue;
+    // Check canvas existence
+    if (!window.ctxs || !Array.isArray(window.ctxs)) {
+      return;
     }
 
-    // Break series on hard stop (-2)
-    if (a.stop === true) {
-      prev = null;
-      continue;
+    // Public API placeholder
+    window.drawDensityLayer = function drawDensityLayer() {
+      // intentionally empty
+      // density logic will be added later
+    };
+
+    // Optional: call safely if render loop exists
+    if (typeof window.render === 'function') {
+      const originalRender = window.render;
+
+      window.render = function () {
+        originalRender();
+        // density layer disabled for now
+        // drawDensityLayer();
+      };
     }
 
-    if (!prev) {
-      ctx.moveTo(a.x, a.y);
-    } else {
-      ctx.lineTo(a.x, a.y);
-    }
-
-    prev = a;
+  } catch (e) {
+    // Absolute silence on error
+    // This layer must NEVER crash the app
   }
-
-  ctx.stroke();
-  ctx.restore();
-}
+})();
