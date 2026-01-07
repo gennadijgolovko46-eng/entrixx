@@ -1,22 +1,18 @@
-/* ===============================
-   ENTRIXX - MIRROR RENDER (V1)
-   =============================== */
+// main.js — ENTRIXX V1
+// main does NOT draw geometry
+// it only places atoms in space
 
 import { drawAtom } from "./atom.js";
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-// =====================
-// CANVAS (DPR FIX)
-// =====================
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-
-  canvas.width = Math.round(rect.width * dpr);
-  canvas.height = Math.round(rect.height * dpr);
-
+  canvas.width = Math.round(window.innerWidth * dpr);
+  canvas.height = Math.round(window.innerHeight * dpr);
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -24,12 +20,13 @@ window.addEventListener("resize", resize);
 resize();
 
 // =====================
-// TEMP DATA (TEST ONLY)
-// x is normalized time position
+// TEST DATA (TEMP)
+// values are PIXELS, not time
 // =====================
-const atoms = [
-  { x: 0.48, y: 0.75, hold: 120, market: -160 }
-];
+const testTrade = {
+  hold: 60,     // px
+  market: -160 // px
+};
 
 // =====================
 // DRAW
@@ -37,20 +34,10 @@ const atoms = [
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < atoms.length; i++) {
-    const a = atoms[i];
+  const x = Math.round(canvas.width / 2);
+  const y = Math.round(canvas.height / 2);
 
-    drawAtom(
-      ctx,
-      a.x * canvas.width,
-      a.y * canvas.height,
-      {
-        hold: a.hold,
-        market: a.market
-      },
-      i
-    );
-  }
+  drawAtom(ctx, x, y, testTrade, 0);
 }
 
 draw();
