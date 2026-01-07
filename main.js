@@ -7,10 +7,15 @@ let cssWidth = 0;
 let cssHeight = 0;
 let mapper = null;
 
+/* ----- PARAMETERS ----- */
+
 const LIMIT_WINDOW = 3;
 const LIMIT_THRESHOLD = 600;
 const FADE_OPACITY = 0.25;
-const SMOOTH = 0.3;
+
+/* behavior tuning (readability only) */
+const SMOOTH = 0.15;          // less smoothing
+const BEHAVIOR_SCALE = 0.5;   // stronger vertical response
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -112,7 +117,7 @@ function drawBehavior(trades, limitTime) {
     value += smooth;
 
     const x = mapper.timeToX(t.ts);
-    const y = cssHeight / 2 + value * 0.2;
+    const y = cssHeight / 2 + value * BEHAVIOR_SCALE;
 
     if (first) {
       ctx.moveTo(x, y);
