@@ -2,8 +2,129 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="refresh" content="0; url=mirror.html">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ENTRIXX</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+  }
+  #day {
+    position: fixed;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font: 12px system-ui, sans-serif;
+    color: rgba(0,0,0,0.45);
+    pointer-events: none;
+  }
+</style>
 </head>
-<body></body>
+<body>
+
+<canvas id="scene"></canvas>
+<div id="day"></div>
+
+<script>
+/* ===============================
+   ENTRIXX · V1
+   Scene Skeleton (Day View)
+   =============================== */
+
+const canvas = document.getElementById("scene");
+const ctx = canvas.getContext("2d");
+const dayLabel = document.getElementById("day");
+
+// ---------- Time (day only) ----------
+const now = new Date();
+const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+dayLabel.textContent = weekday;
+
+// ---------- DPR-safe resize ----------
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  canvas.width  = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width  = w + "px";
+  canvas.style.height = h + "px";
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+// ---------- Gesture time marker ----------
+let touchX = null;
+
+canvas.addEventListener("pointerdown", e => {
+  touchX = e.clientX;
+});
+canvas.addEventListener("pointermove", e => {
+  if (touchX !== null) touchX = e.clientX;
+});
+canvas.addEventListener("pointerup", () => {
+  touchX = null;
+});
+canvas.addEventListener("pointerleave", () => {
+  touchX = null;
+});
+
+// ---------- Layers (EMPTY by design) ----------
+function layerDensity() {
+  // intentionally empty
+}
+
+function layerTrades() {
+  // atoms will live here
+}
+
+function layerLiquidations() {
+  // liquidation markers
+}
+
+function layerBehavior() {
+  // behavior line
+}
+
+function layerState() {
+  // green / red / gray verticals
+}
+
+function layerTimeMarker() {
+  if (touchX === null) return;
+
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(touchX, 0);
+  ctx.lineTo(touchX, canvas.height);
+  ctx.stroke();
+}
+
+// ---------- Render loop ----------
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  layerDensity();
+  layerTrades();
+  layerLiquidations();
+  layerBehavior();
+  layerState();
+  layerTimeMarker();
+
+  requestAnimationFrame(render);
+}
+
+render();
+</script>
+
+</body>
 </html>
