@@ -6,158 +6,163 @@
 <title>ENTRIXX</title>
 
 <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: #ffffff;
-    overflow: hidden;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  overflow: hidden;
+}
+canvas { display: block; }
 
-  canvas { display: block; }
+#date {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.45);
+  pointer-events: none;
+}
 
-  #date {
-    position: fixed;
-    bottom: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    font: 12px system-ui, sans-serif;
-    color: rgba(0,0,0,0.45);
-    pointer-events: none;
-    white-space: nowrap;
-  }
-
-  #time-float {
-    position: fixed;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    font: 12px system-ui, sans-serif;
-    color: rgba(0,0,0,0.85);
-    pointer-events: none;
-    opacity: 0;
-    white-space: nowrap;
-  }
+#time {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.9);
+  pointer-events: none;
+  opacity: 0;
+}
 </style>
 </head>
 <body>
 
-<canvas id="scene"></canvas>
-<div id="time-float"></div>
+<canvas id="c"></canvas>
+<div id="time"></div>
 <div id="date"></div>
 
 <script>
-const canvas = document.getElementById("scene");
+const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-const dateLabel = document.getElementById("date");
-const timeFloat = document.getElementById("time-float");
+const timeEl = document.getElementById("time");
+const dateEl = document.getElementById("date");
 
 /* Date */
-const now = new Date();
-dateLabel.textContent = now.toLocaleDateString("en-US", {
+const d = new Date();
+dateEl.textContent = d.toLocaleDateString("en-US", {
   weekday: "long",
-  day: "numeric",
   month: "short",
+  day: "numeric",
   year: "numeric"
 });
 
 /* Resize */
+let viewW = 0;
+let viewH = 0;
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
+  viewW = window.innerWidth;
+  viewH = window.innerHeight;
+
+  canvas.width = Math.round(viewW * dpr);
+  canvas.height = Math.round(viewH * dpr);
+  canvas.style.width = viewW + "px";
+  canvas.style.height = viewH + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resize);
 resize();
 
-/* Gesture */
+/* Touch */
 let touchX = null;
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
 canvas.addEventListener("pointermove", e => { if (touchX !== null) touchX = e.clientX; });
 canvas.addEventListener("pointerup", () => touchX = null);
 canvas.addEventListener("pointerleave", () => touchX = null);
 
-/* X -> Time */
+/* X -> time */
 function xToTime(x) {
-  const ratio = x / window.innerWidth;
-  const m = Math.round(ratio * 1440);
-  return String(Math.floor(m / 60)).padStart(2,"0") + ":" + String(m % 60).padStart(2,"0");
+  const m = Math.round((x / viewW) * 1440);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
 }
 
-/* ===============================
-   ATOM (FIXED VISIBILITY)
-   =============================== */
-
-const ATOM_TIME_MIN = 10 * 60 + 30; // 10:30
-const BASELINE_Y = 0.5;
-
+/* ===== ATOM ===== */
 const ATOM_SIZE = 8;
-const TAIL_WIDTH = 1;
+const TAIL_W = 1;
+const BASE_Y = viewH * 0.5;
 
-const HOLD_COLOR   = "#2F6BFF";
+const HOLD_COLOR = "#2F6BFF";
 const MARKET_COLOR = "#2DBE60";
-const ATOM_COLOR   = "#000000";
+const ATOM_COLOR = "#000";
 
-const HOLD_VALUE   = 40;
-const MARKET_VALUE = -120;
-const MIN_HOLD     = 6;
+const HOLD = 60;
+const MARKET = -140;
+const MIN_HOLD = 8;
 
-function layerTrades() {
-  const x = (ATOM_TIME_MIN / 1440) * window.innerWidth;
-  const baseY = BASELINE_Y * canvas.height;
+function drawAtom() {
+  const x = viewW * 0.5;
+  const y = viewH * 0.5;
 
-  const top = baseY - ATOM_SIZE / 2;
-  const bottom = baseY + ATOM_SIZE / 2;
+  // baseline (temporary anchor)
+  ctx.strokeStyle = "rgba(0,0,0,0.1)";
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(viewW, y);
+  ctx.stroke();
 
-  ctx.lineWidth = TAIL_WIDTH;
+  const top = y - ATOM_SIZE / 2;
+  const bottom = y + ATOM_SIZE / 2;
+
+  ctx.lineWidth = TAIL_W;
 
   // HOLD
-  const hSign = Math.sign(HOLD_VALUE) || 1;
-  const hLen = Math.max(Math.abs(HOLD_VALUE), MIN_HOLD);
+  const hs = Math.sign(HOLD) || 1;
+  const hl = Math.max(Math.abs(HOLD), MIN_HOLD);
   ctx.strokeStyle = HOLD_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x - ATOM_SIZE / 2, hSign > 0 ? top : bottom);
-  ctx.lineTo(x - ATOM_SIZE / 2, hSign > 0 ? top - hLen : bottom + hLen);
+  ctx.moveTo(x - ATOM_SIZE / 2, hs > 0 ? top : bottom);
+  ctx.lineTo(x - ATOM_SIZE / 2, hs > 0 ? top - hl : bottom + hl);
   ctx.stroke();
 
   // MARKET
-  const mSign = Math.sign(MARKET_VALUE) || 1;
-  const mLen = Math.abs(MARKET_VALUE);
+  const ms = Math.sign(MARKET) || 1;
+  const ml = Math.abs(MARKET);
   ctx.strokeStyle = MARKET_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, mSign > 0 ? top : bottom);
-  ctx.lineTo(x + ATOM_SIZE / 2, mSign > 0 ? top - mLen : bottom + mLen);
+  ctx.moveTo(x + ATOM_SIZE / 2, ms > 0 ? top : bottom);
+  ctx.lineTo(x + ATOM_SIZE / 2, ms > 0 ? top - ml : bottom + ml);
   ctx.stroke();
 
-  // ATOM
+  // square
   ctx.fillStyle = ATOM_COLOR;
-  ctx.fillRect(x - ATOM_SIZE / 2, baseY - ATOM_SIZE / 2, ATOM_SIZE, ATOM_SIZE);
+  ctx.fillRect(x - ATOM_SIZE/2, y - ATOM_SIZE/2, ATOM_SIZE, ATOM_SIZE);
 }
 
 /* Time marker */
-function layerTimeMarker() {
+function drawTime() {
   if (touchX === null) {
-    timeFloat.style.opacity = 0;
+    timeEl.style.opacity = 0;
     return;
   }
   ctx.strokeStyle = "rgba(0,0,0,0.25)";
   ctx.beginPath();
   ctx.moveTo(touchX, 0);
-  ctx.lineTo(touchX, canvas.height);
+  ctx.lineTo(touchX, viewH);
   ctx.stroke();
-  timeFloat.textContent = xToTime(touchX);
-  timeFloat.style.opacity = 1;
+
+  timeEl.textContent = xToTime(touchX);
+  timeEl.style.opacity = 1;
 }
 
 /* Render */
 function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  layerTrades();
-  layerTimeMarker();
+  ctx.clearRect(0,0,viewW,viewH);
+  drawAtom();
+  drawTime();
   requestAnimationFrame(render);
 }
 render();
