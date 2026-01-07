@@ -2,9 +2,6 @@
    ENTRIXX - MIRROR RENDER (V1)
    =============================== */
 
-// =====================
-// CANVAS SETUP
-// =====================
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -20,16 +17,12 @@ resize();
 // =====================
 const ATOM_SIZE = 6;
 
-const TAIL_WIDTH = 1.5;
+const TAIL_WIDTH = 1.2;
 
-// higher contrast, still calm
-const COLOR_HOLD   = "rgba(40,90,255,0.7)";
-const COLOR_MARKET = "rgba(30,170,130,0.7)";
+const COLOR_HOLD   = "rgba(50, 100, 230, 0.8)";
+const COLOR_MARKET = "rgba(40, 180, 130, 0.85)";
 
 const ATOM_COLOR = "#000";
-
-// minimal anti-overlap shift (px)
-const DENSITY_SHIFT = 0.8;
 
 // =====================
 // DATA (TEMP)
@@ -49,26 +42,25 @@ function drawAtom(atom, index) {
 
   const squareTopY = baseY - ATOM_SIZE / 2;
 
-  // tiny deterministic shift to avoid merging in density
-  const shift = (index % 2 === 0 ? -1 : 1) * DENSITY_SHIFT;
+  const shift = (index % 2 === 0 ? -0.6 : 0.6);
 
-  // HOLD tail (left edge)
-  ctx.strokeStyle = COLOR_HOLD;
   ctx.lineWidth = TAIL_WIDTH;
+
+  // HOLD
+  ctx.strokeStyle = COLOR_HOLD;
   ctx.beginPath();
   ctx.moveTo(baseX - ATOM_SIZE / 2 + shift, squareTopY);
   ctx.lineTo(baseX - ATOM_SIZE / 2 + shift, squareTopY - atom.hold);
   ctx.stroke();
 
-  // MARKET tail (right edge)
+  // MARKET
   ctx.strokeStyle = COLOR_MARKET;
-  ctx.lineWidth = TAIL_WIDTH;
   ctx.beginPath();
   ctx.moveTo(baseX + ATOM_SIZE / 2 + shift, squareTopY);
   ctx.lineTo(baseX + ATOM_SIZE / 2 + shift, squareTopY - atom.market);
   ctx.stroke();
 
-  // ATOM body (draw last, keeps anchor clean)
+  // ATOM
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
     baseX - ATOM_SIZE / 2,
@@ -78,12 +70,8 @@ function drawAtom(atom, index) {
   );
 }
 
-// =====================
-// MAIN DRAW
-// =====================
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   for (let i = 0; i < atoms.length; i++) {
     drawAtom(atoms[i], i);
   }
