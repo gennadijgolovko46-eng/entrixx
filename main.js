@@ -8,23 +8,27 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 // =====================
-// CANVAS
+// CANVAS (DPR FIX)
 // =====================
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+
 window.addEventListener("resize", resize);
 resize();
 
 // =====================
 // TEMP DATA (TEST ONLY)
-// x, y are normalized (0..1)
+// x is normalized time position
 // =====================
 const atoms = [
-  { x: 0.25, y: 0.75, hold: 120,  market: -160 },
-  { x: 0.50, y: 0.75, hold: -20,  market: 130  },
-  { x: 0.75, y: 0.75, hold: 5,    market: -190 }
+  { x: 0.48, y: 0.75, hold: 120, market: -160 }
 ];
 
 // =====================
