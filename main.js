@@ -1,64 +1,60 @@
 /* ===============================
-   ENTRIXX — MIRROR
-   main.js (stable)
+   ENTRIXX — MAIN
    =============================== */
 
 const canvas = document.getElementById("layer1");
 const ctx = canvas.getContext("2d");
 
-const dpr = window.devicePixelRatio || 1;
+let W = 0;
+let H = 0;
 
 function resize() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
 }
-
 window.addEventListener("resize", resize);
 resize();
 
-/* test atoms */
+/* ===== DATA ===== */
 const atoms = [
-  { x: 0.25, y: 0.85, hold: 0.12 },
-  { x: 0.50, y: 0.85, hold: 0.07 },
-  { x: 0.75, y: 0.85, hold: 0.16 }
+  { x: 0.25, y: 0.65, hold: 0.22 },
+  { x: 0.50, y: 0.65, hold: 0.14 },
+  { x: 0.75, y: 0.65, hold: 0.28 }
 ];
 
+/* ===== DRAW ===== */
 function draw() {
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.clearRect(0, 0, W, H);
 
   atoms.forEach(a => {
-    const x = a.x * window.innerWidth;
-    const y = a.y * window.innerHeight;
-    const holdPx = a.hold * window.innerHeight;
+    const px = a.x * W;
+    const py = a.y * H;
+    const h  = a.hold * H;
 
     /* green tail */
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(120,180,150,0.45)";
-    ctx.lineWidth = 1;
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y - holdPx);
+    ctx.moveTo(px, py);
+    ctx.lineTo(px, py - h);
+    ctx.strokeStyle = "rgba(40,180,120,0.35)";
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     /* blue tail */
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(40,90,255,0.45)";
-    ctx.lineWidth = 1;
-    ctx.moveTo(x + 2, y);
-    ctx.lineTo(x + 2, y - holdPx * 0.8);
+    ctx.moveTo(px - 2, py);
+    ctx.lineTo(px - 2, py - h * 0.7);
+    ctx.strokeStyle = "rgba(40,90,255,0.55)";
+    ctx.lineWidth = 2;
     ctx.stroke();
 
-    /* decision point */
+    /* atom */
     ctx.fillStyle = "#000";
-    ctx.fillRect(x - 2, y - 2, 4, 4);
+    ctx.fillRect(px - 4, py - 4, 8, 8);
   });
+
+  requestAnimationFrame(draw);
 }
 
 draw();
