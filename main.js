@@ -1,4 +1,9 @@
 import { createTimeMapper } from "./time.js";
+import { computeMarket } from "./market.js";
+
+/* ===============================
+   CANVAS SETUP
+   =============================== */
 
 const canvas = document.getElementById("scene");
 const ctx = canvas.getContext("2d");
@@ -7,15 +12,23 @@ let cssWidth = 0;
 let cssHeight = 0;
 let mapper = null;
 
-/* ----- PARAMETERS ----- */
+/* ===============================
+   PARAMETERS
+   =============================== */
+
+const MARKET_WINDOW_HOURS = 8;
 
 const LIMIT_WINDOW = 3;
 const LIMIT_THRESHOLD = 600;
 const FADE_OPACITY = 0.25;
 
-/* behavior tuning (readability only) */
-const SMOOTH = 0.15;          // less smoothing
-const BEHAVIOR_SCALE = 0.5;   // stronger vertical response
+/* behavior */
+const SMOOTH = 0.15;
+const BEHAVIOR_SCALE = 0.5;
+
+/* ===============================
+   RESIZE
+   =============================== */
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -24,7 +37,7 @@ function resize() {
   cssWidth = rect.width;
   cssHeight = rect.height;
 
-  canvas.width  = cssWidth * dpr;
+  canvas.width = cssWidth * dpr;
   canvas.height = cssHeight * dpr;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -32,7 +45,9 @@ function resize() {
   mapper = createTimeMapper("2026-01-06", cssWidth, 16);
 }
 
-/* ---------- UTIL ---------- */
+/* ===============================
+   UTIL
+   =============================== */
 
 function variance(arr) {
   if (arr.length === 0) return 0;
@@ -40,22 +55,54 @@ function variance(arr) {
   return arr.reduce((s, v) => s + (v - mean) * (v - mean), 0) / arr.length;
 }
 
-/* ---------- DATA (PROBE) ---------- */
+/* ===============================
+   DATA (PROBE)
+   =============================== */
 
-const trades = [
-  { time: "2026-01-06T09:10:00Z", hold: 30, market: 50 },
-  { time: "2026-01-06T09:18:00Z", hold: 25, market: 40 },
-  { time: "2026-01-06T09:40:00Z", hold: 20, market: 35 },
-  { time: "2026-01-06T12:00:00Z", hold: 40, market: 60 },
-  { time: "2026-01-06T12:01:30Z", hold: 15, market: 50 },
-  { time: "2026-01-06T12:02:10Z", hold: 10, market: 45 },
-  { time: "2026-01-06T16:20:00Z", hold: 50, market: 55 }
+/* trades: EXIT-BASED */
+let trades = [
+  { time: "2026-01-06T09:10:00Z", side: "long",  exit_price: 100 },
+  { time: "2026-01-06T09:18:00Z", side: "long",  exit_price: 102 },
+  { time: "2026-01-06T09:40:00Z", side: "short", exit_price: 105 },
+  { time: "2026-01-06T12:00:00Z", side: "long",  exit_price: 110 },
+  { time: "2026-01-06T12:01:30Z", side: "long",  exit_price: 112 },
+  { time: "2026-01-06T12:02:10Z", side: "short", exit_price: 111 },
+  { time: "2026-01-06T16:20:00Z", side: "long",  exit_price: 115 }
 ].map(t => ({
   ...t,
   ts: Date.parse(t.time)
 }));
 
-/* ---------- LIMIT ---------- */
+/* minute OHLC mock */
+let ohlc = [];
+let t0 = Date.parse("2026-01-06T09:00:00Z");
+let price = 100;
+
+for (let i = 0; i < 600; i++) {
+  let high = price + Math.random() * 5;
+  let low  = price - Math.random() * 5;
+  let close = low + Math.random() * (high - low);
+
+  ohlc.push({
+    ts: t0 + i * 60 * 1000,
+    open: price,
+    high,
+    low,
+    close
+  });
+
+  price = close;
+}
+
+/* ===============================
+   MARKET ATTACH
+   =============================== */
+
+trades = computeMarket(trades, ohlc);
+
+/* ===============================
+   LIMIT DETECTOR
+   =============================== */
 
 function detectLimit(times) {
   let deltas = [];
@@ -71,7 +118,9 @@ function detectLimit(times) {
   return null;
 }
 
-/* ---------- ATOM ---------- */
+/* ===============================
+   DRAW ATOM
+   =============================== */
 
 function drawAtom(x, y, hold, market, alpha = 1) {
   const ATOM = 6;
@@ -98,7 +147,9 @@ function drawAtom(x, y, hold, market, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
-/* ---------- BEHAVIOR LINE ---------- */
+/* ===============================
+   BEHAVIOR LINE
+   =============================== */
 
 function drawBehavior(trades, limitTime) {
   let value = 0;
@@ -112,7 +163,7 @@ function drawBehavior(trades, limitTime) {
   trades.forEach(t => {
     if (limitTime && t.ts > limitTime) return;
 
-    const delta = t.hold - t.market;
+    const delta = (t.hold || 0) - (t.market || 0);
     smooth = smooth * (1 - SMOOTH) + delta * SMOOTH;
     value += smooth;
 
@@ -130,7 +181,9 @@ function drawBehavior(trades, limitTime) {
   ctx.stroke();
 }
 
-/* ---------- RENDER ---------- */
+/* ===============================
+   RENDER
+   =============================== */
 
 function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
@@ -171,11 +224,15 @@ function render() {
     const alpha =
       limitTime && t.ts > limitTime ? FADE_OPACITY : 1;
 
-    drawAtom(x, y, t.hold, t.market, alpha);
+    drawAtom(x, y, t.hold || 0, t.market || 0, alpha);
   });
 
   requestAnimationFrame(render);
 }
+
+/* ===============================
+   START
+   =============================== */
 
 window.addEventListener("resize", resize);
 
