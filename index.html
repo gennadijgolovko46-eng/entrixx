@@ -90,10 +90,10 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
 }
 
-/* ===== ATOM ===== */
-const ATOM_SIZE = 8;
+/* ===== ATOM (FIXED) ===== */
+const ATOM_SIZE = 2;   // <<< CRITICAL FIX
 const TAIL_W = 1;
-const BASE_Y = viewH * 0.5;
+const BASE_Y = () => Math.round(viewH * 0.5);
 
 const HOLD_COLOR = "#2F6BFF";
 const MARKET_COLOR = "#2DBE60";
@@ -101,21 +101,13 @@ const ATOM_COLOR = "#000";
 
 const HOLD = 60;
 const MARKET = -140;
-const MIN_HOLD = 8;
+const MIN_HOLD = 6;
 
 function drawAtom() {
-  const x = viewW * 0.5;
-  const y = viewH * 0.5;
+  const x = Math.round(viewW * 0.5);
+  const y = BASE_Y();
 
-  // baseline (temporary anchor)
-  ctx.strokeStyle = "rgba(0,0,0,0.1)";
-  ctx.beginPath();
-  ctx.moveTo(0, y);
-  ctx.lineTo(viewW, y);
-  ctx.stroke();
-
-  const top = y - ATOM_SIZE / 2;
-  const bottom = y + ATOM_SIZE / 2;
+  const half = ATOM_SIZE / 2;
 
   ctx.lineWidth = TAIL_W;
 
@@ -124,8 +116,8 @@ function drawAtom() {
   const hl = Math.max(Math.abs(HOLD), MIN_HOLD);
   ctx.strokeStyle = HOLD_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x - ATOM_SIZE / 2, hs > 0 ? top : bottom);
-  ctx.lineTo(x - ATOM_SIZE / 2, hs > 0 ? top - hl : bottom + hl);
+  ctx.moveTo(x - half, y);
+  ctx.lineTo(x - half, y - hs * hl);
   ctx.stroke();
 
   // MARKET
@@ -133,13 +125,18 @@ function drawAtom() {
   const ml = Math.abs(MARKET);
   ctx.strokeStyle = MARKET_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, ms > 0 ? top : bottom);
-  ctx.lineTo(x + ATOM_SIZE / 2, ms > 0 ? top - ml : bottom + ml);
+  ctx.moveTo(x + half, y);
+  ctx.lineTo(x + half, y - ms * ml);
   ctx.stroke();
 
-  // square
+  // ATOM BODY (point, not interval)
   ctx.fillStyle = ATOM_COLOR;
-  ctx.fillRect(x - ATOM_SIZE/2, y - ATOM_SIZE/2, ATOM_SIZE, ATOM_SIZE);
+  ctx.fillRect(
+    Math.round(x - half),
+    Math.round(y - half),
+    ATOM_SIZE,
+    ATOM_SIZE
+  );
 }
 
 /* Time marker */
