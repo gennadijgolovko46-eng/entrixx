@@ -90,8 +90,8 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
 }
 
-/* ===== ATOM (FIXED) ===== */
-const ATOM_SIZE = 2;   // <<< CRITICAL FIX
+/* ===== ATOM (BOTH UP) ===== */
+const ATOM_SIZE = 2;
 const TAIL_W = 1;
 const BASE_Y = () => Math.round(viewH * 0.5);
 
@@ -99,37 +99,34 @@ const HOLD_COLOR = "#2F6BFF";
 const MARKET_COLOR = "#2DBE60";
 const ATOM_COLOR = "#000";
 
-const HOLD = 60;
-const MARKET = -140;
-const MIN_HOLD = 6;
+const HOLD = 120;     // UP
+const MARKET = 200;  // UP
+
+const HOLD_OFFSET_X = -2;
+const MARKET_OFFSET_X = 2;
 
 function drawAtom() {
   const x = Math.round(viewW * 0.5);
   const y = BASE_Y();
-
   const half = ATOM_SIZE / 2;
 
   ctx.lineWidth = TAIL_W;
 
-  // HOLD
-  const hs = Math.sign(HOLD) || 1;
-  const hl = Math.max(Math.abs(HOLD), MIN_HOLD);
+  // HOLD (blue, up)
   ctx.strokeStyle = HOLD_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x - half, y);
-  ctx.lineTo(x - half, y - hs * hl);
+  ctx.moveTo(x + HOLD_OFFSET_X, y);
+  ctx.lineTo(x + HOLD_OFFSET_X, y - HOLD);
   ctx.stroke();
 
-  // MARKET
-  const ms = Math.sign(MARKET) || 1;
-  const ml = Math.abs(MARKET);
+  // MARKET (green, up)
   ctx.strokeStyle = MARKET_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x + half, y);
-  ctx.lineTo(x + half, y - ms * ml);
+  ctx.moveTo(x + MARKET_OFFSET_X, y);
+  ctx.lineTo(x + MARKET_OFFSET_X, y - MARKET);
   ctx.stroke();
 
-  // ATOM BODY (point, not interval)
+  // ATOM BODY
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
     Math.round(x - half),
