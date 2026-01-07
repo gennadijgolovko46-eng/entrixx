@@ -1,128 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>ENTRIXX — Mirror V1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<meta charset="UTF-8" />
+<title>ENTRIXX — Mirror</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #fff;
+  background: #ffffff;
   overflow: hidden;
 }
-
 canvas {
   display: block;
 }
-
 #back {
   position: fixed;
   bottom: 18px;
   right: 18px;
+  font-family: system-ui, sans-serif;
   font-size: 13px;
-  color: rgba(0,0,0,0.4);
-  text-decoration: none;
+  color: rgba(0,0,0,0.45);
+  cursor: pointer;
 }
 </style>
 </head>
-
 <body>
 
-<canvas id="c"></canvas>
-<a id="back" href="/">back</a>
+<canvas id="canvas"></canvas>
+<div id="back">back</div>
 
 <script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+/* ===============================
+   CONFIG
+   =============================== */
+const ATOM_SIZE = 6;        // square size
+const SCALE = 2;            // visual scale for tails
+const MIN_TAIL = ATOM_SIZE; // minimum visible tail
+const CENTER_LINE = true;
 
-/* ===== VISUAL CONSTANTS ===== */
-const SQUARE = 5;        // уменьшили квадрат
-const TAIL_WIDTH = 1;    // хвосты тоньше
-const TAIL_GAP = 4;      // зазор между хвостами
-const EVENT_GAP_Y = 70;
+/* ===============================
+   CANVAS
+   =============================== */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-/* ===== CANVAS ===== */
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = document.documentElement.clientWidth;
-  const h = document.documentElement.clientHeight;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
 
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
+/* ===============================
+   SAMPLE DATA (PROBE)
+   hold   = result of trade
+   market = market move after entry
+   =============================== */
+const atoms = [
+  { x: 0.35, y: 0.55, hold: 3,  market: 18 },
+  { x: 0.37, y: 0.56, hold: 1,  market: 14 },
+  { x: 0.39, y: 0.57, hold: 6,  market: 22 },
+  { x: 0.50, y: 0.55, hold: 2,  market: 26 },
+  { x: 0.62, y: 0.56, hold: 1,  market: 9  }
+];
 
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+/* ===============================
+   HELPERS
+   =============================== */
+function scaledTail(value) {
+  if (value === 0) return 0;
+  const v = Math.abs(value * SCALE);
+  return Math.max(v, MIN_TAIL) * Math.sign(value);
 }
 
-/* ===== DRAWING ===== */
-function drawEvent(x, y, hold, market) {
-  const tails = [];
+/* ===============================
+   DRAW ATOM
+   =============================== */
+function drawAtom(atom) {
+  const x = atom.x * canvas.width;
+  const y = atom.y * canvas.height;
 
-  if (hold !== 0) {
-    tails.push({ len: hold, color: '#2563eb' });   // blue
-  }
-  if (market !== 0) {
-    tails.push({ len: market, color: '#16a34a' }); // green
-  }
+  const holdTail = scaledTail(atom.hold);
+  const marketTail = scaledTail(atom.market);
 
-  drawTails(x, y, tails);
+  // HOLD (blue)
+  ctx.strokeStyle = "#2b6cff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 2, y);
+  ctx.lineTo(x - 2, y - holdTail);
+  ctx.stroke();
 
-  // anchor square
-  ctx.fillStyle = '#000';
+  // MARKET (green)
+  ctx.strokeStyle = "#2fb56f";
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y);
+  ctx.lineTo(x + 2, y - marketTail);
+  ctx.stroke();
+
+  // BODY (black square)
+  ctx.fillStyle = "#000000";
   ctx.fillRect(
-    x - SQUARE / 2,
-    y - SQUARE / 2,
-    SQUARE,
-    SQUARE
+    x - ATOM_SIZE / 2,
+    y - ATOM_SIZE / 2,
+    ATOM_SIZE,
+    ATOM_SIZE
   );
 }
 
-function drawTails(x, y, list) {
-  if (!list.length) return;
-
-  const totalWidth =
-    list.length * TAIL_WIDTH +
-    (list.length - 1) * TAIL_GAP;
-
-  const startX = x - totalWidth / 2 + TAIL_WIDTH / 2;
-
-  list.forEach((t, i) => {
-    const tx = startX + i * (TAIL_WIDTH + TAIL_GAP);
-
-    ctx.strokeStyle = t.color;
-    ctx.lineWidth = TAIL_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(tx, y);
-    ctx.lineTo(tx, y - t.len); // вверх / вниз по знаку
-    ctx.stroke();
-  });
-}
-
-/* ===== SCENE ===== */
+/* ===============================
+   DRAW
+   =============================== */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const h = canvas.height / (window.devicePixelRatio || 1);
-  const baseY = h / 2;
+  // center line (time divider)
+  if (CENTER_LINE) {
+    ctx.strokeStyle = "rgba(200,0,0,0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.stroke();
+  }
 
-  drawEvent(140, baseY - EVENT_GAP_Y, 120, -60);
-  drawEvent(340, baseY, -150, -40);
-  drawEvent(560, baseY + EVENT_GAP_Y, 90, 130);
+  atoms.forEach(drawAtom);
 }
 
-/* ===== INIT ===== */
-function init() {
-  resize();
-  draw();
-}
+draw();
 
-window.addEventListener('resize', init);
-requestAnimationFrame(init);
+/* ===============================
+   NAV
+   =============================== */
+document.getElementById("back").onclick = () => {
+  window.location.href = "/";
+};
 </script>
 
 </body>
