@@ -7,9 +7,10 @@ let cssWidth = 0;
 let cssHeight = 0;
 let mapper = null;
 
-const LIMIT_WINDOW = 3;        // sliding window size
-const LIMIT_THRESHOLD = 600;  // seconds variance threshold
+const LIMIT_WINDOW = 3;
+const LIMIT_THRESHOLD = 600;
 const FADE_OPACITY = 0.25;
+const SMOOTH = 0.3;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -34,20 +35,46 @@ function variance(arr) {
   return arr.reduce((s, v) => s + (v - mean) * (v - mean), 0) / arr.length;
 }
 
+/* ---------- DATA (PROBE) ---------- */
+
+const trades = [
+  { time: "2026-01-06T09:10:00Z", hold: 30, market: 50 },
+  { time: "2026-01-06T09:18:00Z", hold: 25, market: 40 },
+  { time: "2026-01-06T09:40:00Z", hold: 20, market: 35 },
+  { time: "2026-01-06T12:00:00Z", hold: 40, market: 60 },
+  { time: "2026-01-06T12:01:30Z", hold: 15, market: 50 },
+  { time: "2026-01-06T12:02:10Z", hold: 10, market: 45 },
+  { time: "2026-01-06T16:20:00Z", hold: 50, market: 55 }
+].map(t => ({
+  ...t,
+  ts: Date.parse(t.time)
+}));
+
+/* ---------- LIMIT ---------- */
+
+function detectLimit(times) {
+  let deltas = [];
+  for (let i = 1; i < times.length; i++) {
+    deltas.push((times[i] - times[i - 1]) / 1000);
+    if (deltas.length >= LIMIT_WINDOW) {
+      const v = variance(deltas.slice(-LIMIT_WINDOW));
+      if (v > LIMIT_THRESHOLD) {
+        return times[i];
+      }
+    }
+  }
+  return null;
+}
+
 /* ---------- ATOM ---------- */
 
 function drawAtom(x, y, hold, market, alpha = 1) {
-  const ATOM_SIZE = 6;
+  const ATOM = 6;
 
   ctx.globalAlpha = alpha;
 
   ctx.fillStyle = "#000";
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
+  ctx.fillRect(x - ATOM / 2, y - ATOM / 2, ATOM, ATOM);
 
   ctx.lineWidth = 1;
 
@@ -66,32 +93,36 @@ function drawAtom(x, y, hold, market, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
-/* ---------- TEST DATA ---------- */
+/* ---------- BEHAVIOR LINE ---------- */
 
-const trades = [
-  "2026-01-06T09:10:00Z",
-  "2026-01-06T09:18:00Z",
-  "2026-01-06T09:40:00Z",
-  "2026-01-06T12:00:00Z",
-  "2026-01-06T12:01:30Z",
-  "2026-01-06T12:02:10Z",
-  "2026-01-06T16:20:00Z"
-].map(t => Date.parse(t));
+function drawBehavior(trades, limitTime) {
+  let value = 0;
+  let smooth = 0;
+  let first = true;
 
-/* ---------- LIMIT DETECTOR ---------- */
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
 
-function detectLimit(times) {
-  let deltas = [];
-  for (let i = 1; i < times.length; i++) {
-    deltas.push((times[i] - times[i - 1]) / 1000);
-    if (deltas.length >= LIMIT_WINDOW) {
-      const v = variance(deltas.slice(-LIMIT_WINDOW));
-      if (v > LIMIT_THRESHOLD) {
-        return times[i];
-      }
+  trades.forEach(t => {
+    if (limitTime && t.ts > limitTime) return;
+
+    const delta = t.hold - t.market;
+    smooth = smooth * (1 - SMOOTH) + delta * SMOOTH;
+    value += smooth;
+
+    const x = mapper.timeToX(t.ts);
+    const y = cssHeight / 2 + value * 0.2;
+
+    if (first) {
+      ctx.moveTo(x, y);
+      first = false;
+    } else {
+      ctx.lineTo(x, y);
     }
-  }
-  return null;
+  });
+
+  ctx.stroke();
 }
 
 /* ---------- RENDER ---------- */
@@ -104,12 +135,12 @@ function render() {
     return;
   }
 
-  const limitTime = detectLimit(trades);
+  const times = trades.map(t => t.ts);
+  const limitTime = detectLimit(times);
 
   const xStart = mapper.timeToX(mapper.dayStart);
   const xEnd   = mapper.timeToX(mapper.dayEnd);
 
-  // state bar
   if (limitTime) {
     const xLimit = mapper.timeToX(limitTime);
 
@@ -126,20 +157,16 @@ function render() {
     ctx.stroke();
   }
 
+  drawBehavior(trades, limitTime);
+
   trades.forEach((t, i) => {
-    const x = mapper.timeToX(t);
+    const x = mapper.timeToX(t.ts);
     const y = cssHeight / 2 + (i % 3) * 8;
 
     const alpha =
-      limitTime && t > limitTime ? FADE_OPACITY : 1;
+      limitTime && t.ts > limitTime ? FADE_OPACITY : 1;
 
-    drawAtom(
-      x,
-      y,
-      40 + i * 5,
-      30 + i * 4,
-      alpha
-    );
+    drawAtom(x, y, t.hold, t.market, alpha);
   });
 
   requestAnimationFrame(render);
