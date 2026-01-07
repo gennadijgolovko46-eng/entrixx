@@ -44,30 +44,30 @@ function drawAtom(atom) {
   const baseX = atom.x * canvas.width;
   const baseY = atom.y * canvas.height;
 
-  // Pixel-aligned top edge
-  const squareTopY = Math.round(baseY - ATOM_SIZE / 2) + 0.5;
+  const squareTopY = baseY - ATOM_SIZE / 2;
+  const tailStartY = squareTopY + TAIL_WIDTH / 2;
 
   // HOLD tail (left)
   ctx.strokeStyle = COLOR_HOLD;
   ctx.lineWidth = TAIL_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(baseX - TAIL_OFFSET_X, squareTopY);
-  ctx.lineTo(baseX - TAIL_OFFSET_X, squareTopY - atom.hold);
+  ctx.moveTo(baseX - TAIL_OFFSET_X, tailStartY);
+  ctx.lineTo(baseX - TAIL_OFFSET_X, tailStartY - atom.hold);
   ctx.stroke();
 
   // MARKET tail (right)
   ctx.strokeStyle = COLOR_MARKET;
   ctx.lineWidth = TAIL_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(baseX + TAIL_OFFSET_X, squareTopY);
-  ctx.lineTo(baseX + TAIL_OFFSET_X, squareTopY - atom.market);
+  ctx.moveTo(baseX + TAIL_OFFSET_X, tailStartY);
+  ctx.lineTo(baseX + TAIL_OFFSET_X, tailStartY - atom.market);
   ctx.stroke();
 
   // ATOM body
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
-    Math.round(baseX - ATOM_SIZE / 2),
-    Math.round(baseY - ATOM_SIZE / 2),
+    baseX - ATOM_SIZE / 2,
+    baseY - ATOM_SIZE / 2,
     ATOM_SIZE,
     ATOM_SIZE
   );
