@@ -4,17 +4,21 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ENTRIXX</title>
+
 <style>
   html, body {
     margin: 0;
     padding: 0;
-    background: #fff;
+    background: #ffffff;
     overflow: hidden;
   }
+
   canvas {
     display: block;
   }
-  #day {
+
+  /* Date label (always visible, bottom) */
+  #date {
     position: fixed;
     bottom: 8px;
     left: 50%;
@@ -22,84 +26,109 @@
     font: 12px system-ui, sans-serif;
     color: rgba(0,0,0,0.45);
     pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* Time label (touch only, top) */
+  #time-float {
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font: 12px system-ui, sans-serif;
+    color: rgba(0,0,0,0.6);
+    pointer-events: none;
+    opacity: 0;
+    white-space: nowrap;
   }
 </style>
 </head>
 <body>
 
 <canvas id="scene"></canvas>
-<div id="day"></div>
+<div id="time-float"></div>
+<div id="date"></div>
 
 <script>
 /* ===============================
-   ENTRIXX · V1
-   Scene Skeleton (Day View)
+   ENTRIXX V1
+   One-day scene skeleton
    =============================== */
 
 const canvas = document.getElementById("scene");
 const ctx = canvas.getContext("2d");
-const dayLabel = document.getElementById("day");
 
-// ---------- Time (day only) ----------
+const dateLabel = document.getElementById("date");
+const timeFloat = document.getElementById("time-float");
+
+/* ---------- Date (always visible) ---------- */
 const now = new Date();
-const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
-dayLabel.textContent = weekday;
+dateLabel.textContent = now.toLocaleDateString("en-US", {
+  weekday: "long",
+  day: "numeric",
+  month: "short",
+  year: "numeric"
+});
 
-// ---------- DPR-safe resize ----------
+/* ---------- DPR-safe resize ---------- */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
   const h = window.innerHeight;
 
-  canvas.width  = Math.round(w * dpr);
+  canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
-  canvas.style.width  = w + "px";
+  canvas.style.width = w + "px";
   canvas.style.height = h + "px";
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+
 window.addEventListener("resize", resize);
 resize();
 
-// ---------- Gesture time marker ----------
+/* ---------- Gesture state ---------- */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => {
   touchX = e.clientX;
 });
+
 canvas.addEventListener("pointermove", e => {
-  if (touchX !== null) touchX = e.clientX;
+  if (touchX !== null) {
+    touchX = e.clientX;
+  }
 });
+
 canvas.addEventListener("pointerup", () => {
   touchX = null;
 });
+
 canvas.addEventListener("pointerleave", () => {
   touchX = null;
 });
 
-// ---------- Layers (EMPTY by design) ----------
-function layerDensity() {
-  // intentionally empty
+/* ---------- X to time (24h) ---------- */
+function xToTime(x) {
+  const ratio = x / window.innerWidth;
+  const totalMinutes = Math.round(ratio * 24 * 60);
+  const h = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+  const m = String(totalMinutes % 60).padStart(2, "0");
+  return h + ":" + m;
 }
 
-function layerTrades() {
-  // atoms will live here
-}
-
-function layerLiquidations() {
-  // liquidation markers
-}
-
-function layerBehavior() {
-  // behavior line
-}
-
-function layerState() {
-  // green / red / gray verticals
-}
+/* ---------- Layers (empty by design) ---------- */
+function layerDensity() {}
+function layerTrades() {}
+function layerLiquidations() {}
+function layerBehavior() {}
+function layerState() {}
 
 function layerTimeMarker() {
-  if (touchX === null) return;
+  if (touchX === null) {
+    timeFloat.style.opacity = 0;
+    return;
+  }
 
   ctx.strokeStyle = "rgba(0,0,0,0.25)";
   ctx.lineWidth = 1;
@@ -107,9 +136,12 @@ function layerTimeMarker() {
   ctx.moveTo(touchX, 0);
   ctx.lineTo(touchX, canvas.height);
   ctx.stroke();
+
+  timeFloat.textContent = xToTime(touchX);
+  timeFloat.style.opacity = 1;
 }
 
-// ---------- Render loop ----------
+/* ---------- Render loop ---------- */
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
