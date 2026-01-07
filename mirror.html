@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>ENTRIXX — Mirror</title>
+<title>ENTRIXX — Mirror (ISOLATION)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
 <style>
 html, body {
   margin: 0;
@@ -14,97 +13,28 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-
-canvas {
-  display: block;
-}
-
+canvas { display: block; }
 #back {
   position: fixed;
-  bottom: 18px;
   right: 18px;
-  font-family: system-ui, sans-serif;
+  bottom: 18px;
   font-size: 13px;
-  color: rgba(0,0,0,0.45);
+  color: rgba(0,0,0,0.4);
   cursor: pointer;
 }
 </style>
 </head>
-
 <body>
 
 <canvas id="canvas"></canvas>
 <div id="back">back</div>
 
+<!-- ONLY ONE SCRIPT -->
+<script src="main.js"></script>
+
 <script>
-"use strict";
-
-/* ===== CANVAS ===== */
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resize);
-resize();
-
-/* ===== TEST DRAW (MUST BE VISIBLE) ===== */
-ctx.fillStyle = "red";
-ctx.fillRect(0, 0, 100, 100);
-
-/* ===== SAMPLE ATOMS ===== */
-const ATOM_SIZE = 6;
-
-const atoms = [
-  { x: 0.3, y: 0.55, hold: 40, market: 120 },
-  { x: 0.36, y: 0.56, hold: 20, market: 80 },
-  { x: 0.42, y: 0.57, hold: 60, market: 160 }
-];
-
-/* ===== DRAW ===== */
-function drawAtom(a) {
-  const x = a.x * canvas.width;
-  const y = a.y * canvas.height;
-
-  // hold (blue)
-  ctx.strokeStyle = "#2F6BFF";
-  ctx.beginPath();
-  ctx.moveTo(x - 2, y);
-  ctx.lineTo(x - 2, y - a.hold);
-  ctx.stroke();
-
-  // market (green)
-  ctx.strokeStyle = "#2DBE60";
-  ctx.beginPath();
-  ctx.moveTo(x + 2, y);
-  ctx.lineTo(x + 2, y - a.market);
-  ctx.stroke();
-
-  // body
-  ctx.fillStyle = "#000";
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
-}
-
-function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  atoms.forEach(drawAtom);
-
-  requestAnimationFrame(render);
-}
-
-render();
-
-/* ===== NAV ===== */
 document.getElementById("back").onclick = () => {
-  window.location.href = "/";
+  location.href = "/";
 };
 </script>
 
