@@ -13,18 +13,19 @@ html, body {
   height: 100%;
   background: #ffffff;
   overflow: hidden;
+  font-family: system-ui, sans-serif;
 }
 canvas {
   display: block;
 }
 #back {
   position: fixed;
-  bottom: 18px;
   right: 18px;
-  font-family: system-ui, sans-serif;
+  bottom: 18px;
   font-size: 13px;
   color: rgba(0,0,0,0.45);
   cursor: pointer;
+  user-select: none;
 }
 </style>
 </head>
@@ -34,11 +35,105 @@ canvas {
 <canvas id="canvas"></canvas>
 <div id="back">back</div>
 
-<!-- ONLY ONE SCRIPT -->
-<script src="main.js"></script>
-
 <script>
-document.getElementById("back").onclick = function () {
+/* ===============================
+   CANVAS SETUP
+   =============================== */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ===============================
+   CONFIG
+   =============================== */
+
+const ATOM_SIZE  = 6;
+const TAIL_SCALE = 2;
+const MIN_TAIL   = ATOM_SIZE;
+
+/* ===============================
+   SAMPLE DATA
+   =============================== */
+
+const atoms = [
+  { x: 0.30, y: 0.55, hold: 3, market: 18 },
+  { x: 0.34, y: 0.56, hold: 1, market: 14 },
+  { x: 0.38, y: 0.57, hold: 6, market: 22 },
+  { x: 0.52, y: 0.55, hold: 2, market: 26 },
+  { x: 0.66, y: 0.56, hold: 1, market: 9 }
+];
+
+/* ===============================
+   HELPERS
+   =============================== */
+
+function scaleTail(v) {
+  if (v === 0) return 0;
+  const abs = Math.abs(v * TAIL_SCALE);
+  return Math.max(abs, MIN_TAIL) * Math.sign(v);
+}
+
+/* ===============================
+   DRAW ATOM
+   =============================== */
+
+function drawAtom(a) {
+  const x = a.x * canvas.width;
+  const y = a.y * canvas.height;
+
+  const hold   = scaleTail(a.hold);
+  const market = scaleTail(a.market);
+
+  /* HOLD TAIL (BLUE) */
+  ctx.strokeStyle = "rgba(40,90,255,0.45)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 2, y);
+  ctx.lineTo(x - 2, y - hold);
+  ctx.stroke();
+
+  /* MARKET TAIL (NEUTRAL) */
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y);
+  ctx.lineTo(x + 2, y - market);
+  ctx.stroke();
+
+  /* BODY */
+  ctx.fillStyle = "#000";
+  ctx.fillRect(
+    x - ATOM_SIZE / 2,
+    y - ATOM_SIZE / 2,
+    ATOM_SIZE,
+    ATOM_SIZE
+  );
+}
+
+/* ===============================
+   RENDER LOOP
+   =============================== */
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  atoms.forEach(drawAtom);
+  requestAnimationFrame(render);
+}
+render();
+
+/* ===============================
+   NAV
+   =============================== */
+
+document.getElementById("back").onclick = () => {
   window.location.href = "/";
 };
 </script>
