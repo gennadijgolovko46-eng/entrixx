@@ -7,6 +7,8 @@ let cssWidth = 0;
 let cssHeight = 0;
 let mapper = null;
 
+const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -21,6 +23,30 @@ function resize() {
 
   mapper = createTimeMapper("2026-01-06", cssWidth, 16);
 }
+
+/* ---------- MARKET CALC ---------- */
+
+function calcMarketDelta(exitTime, exitPrice, side, ohlc) {
+  const windowEnd = exitTime + MARKET_WINDOW_MS;
+
+  let best = 0;
+
+  for (let i = 0; i < ohlc.length; i++) {
+    const [ts, open, high, low, close] = ohlc[i];
+
+    if (ts < exitTime || ts > windowEnd) continue;
+
+    if (side === "long") {
+      best = Math.max(best, high - exitPrice);
+    } else {
+      best = Math.max(best, exitPrice - low);
+    }
+  }
+
+  return best;
+}
+
+/* ---------- DRAW ---------- */
 
 function drawAtom(x, y, hold, market) {
   const ATOM_SIZE = 6;
@@ -48,6 +74,33 @@ function drawAtom(x, y, hold, market) {
   ctx.stroke();
 }
 
+/* ---------- TEST DATA ---------- */
+
+const ohlc = [
+  [Date.parse("2026-01-06T12:01:00Z"), 100, 102, 99, 101],
+  [Date.parse("2026-01-06T12:10:00Z"), 101, 104, 100, 103],
+  [Date.parse("2026-01-06T12:40:00Z"), 103, 105, 101, 102],
+  [Date.parse("2026-01-06T13:30:00Z"), 102, 103, 97, 98],
+  [Date.parse("2026-01-06T15:00:00Z"), 98, 100, 96, 97]
+];
+
+const trades = [
+  {
+    time: Date.parse("2026-01-06T12:00:00Z"),
+    side: "long",
+    entry: 98,
+    exit: 100
+  },
+  {
+    time: Date.parse("2026-01-06T12:01:30Z"),
+    side: "short",
+    entry: 102,
+    exit: 100
+  }
+];
+
+/* ---------- RENDER ---------- */
+
 function render() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
@@ -65,28 +118,23 @@ function render() {
     ctx.lineTo(xEnd, cssHeight);
     ctx.stroke();
 
-    const times = [
-      "2026-01-06T09:10:00Z",
-      "2026-01-06T09:18:00Z",
-      "2026-01-06T09:40:00Z",
-      "2026-01-06T12:00:00Z",
-      "2026-01-06T12:01:30Z",
-      "2026-01-06T16:20:00Z"
-    ];
+    trades.forEach((tr, i) => {
+      const x = mapper.timeToX(tr.time);
+      const y = cssHeight / 2 + i * 14;
 
-    times.forEach((iso, i) => {
-      const t = new Date(iso).getTime();
-      const x = mapper.timeToX(t);
+      const hold =
+        tr.side === "long"
+          ? tr.exit - tr.entry
+          : tr.entry - tr.exit;
 
-      // small vertical separation to avoid overlap
-      const y = cssHeight / 2 + (i % 3) * 8;
-
-      drawAtom(
-        x,
-        y,
-        40 + i * 10,
-        20 + i * 5
+      const market = calcMarketDelta(
+        tr.time,
+        tr.exit,
+        tr.side,
+        ohlc
       );
+
+      drawAtom(x, y, hold * 20, market * 20);
     });
   }
 
