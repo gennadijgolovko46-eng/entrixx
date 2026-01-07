@@ -13,14 +13,16 @@ window.addEventListener("resize", resize);
 resize();
 
 // =====================
-// CONFIG
+// CONFIG (CANON)
 // =====================
 const ATOM_SIZE = 6;
 
 const TAIL_WIDTH = 1.2;
 
-const COLOR_HOLD   = "rgba(50, 100, 230, 0.8)";
-const COLOR_MARKET = "rgba(40, 180, 130, 0.85)";
+// HOLD = personal result
+// MARKET = market potential
+const COLOR_HOLD   = "rgba(50,100,230,0.8)";
+const COLOR_MARKET = "rgba(40,180,130,0.85)";
 
 const ATOM_COLOR = "#000";
 
@@ -34,33 +36,31 @@ const atoms = [
 ];
 
 // =====================
-// DRAW ATOM
+// DRAW ATOM (SYMMETRIC)
 // =====================
-function drawAtom(atom, index) {
+function drawAtom(atom) {
   const baseX = atom.x * canvas.width;
   const baseY = atom.y * canvas.height;
 
   const squareTopY = baseY - ATOM_SIZE / 2;
 
-  const shift = (index % 2 === 0 ? -0.6 : 0.6);
-
   ctx.lineWidth = TAIL_WIDTH;
 
-  // HOLD
+  // HOLD (left edge)
   ctx.strokeStyle = COLOR_HOLD;
   ctx.beginPath();
-  ctx.moveTo(baseX - ATOM_SIZE / 2 + shift, squareTopY);
-  ctx.lineTo(baseX - ATOM_SIZE / 2 + shift, squareTopY - atom.hold);
+  ctx.moveTo(baseX - ATOM_SIZE / 2, squareTopY);
+  ctx.lineTo(baseX - ATOM_SIZE / 2, squareTopY - atom.hold);
   ctx.stroke();
 
-  // MARKET
+  // MARKET (right edge)
   ctx.strokeStyle = COLOR_MARKET;
   ctx.beginPath();
-  ctx.moveTo(baseX + ATOM_SIZE / 2 + shift, squareTopY);
-  ctx.lineTo(baseX + ATOM_SIZE / 2 + shift, squareTopY - atom.market);
+  ctx.moveTo(baseX + ATOM_SIZE / 2, squareTopY);
+  ctx.lineTo(baseX + ATOM_SIZE / 2, squareTopY - atom.market);
   ctx.stroke();
 
-  // ATOM
+  // ATOM (anchor, neutral)
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
     baseX - ATOM_SIZE / 2,
@@ -70,10 +70,13 @@ function drawAtom(atom, index) {
   );
 }
 
+// =====================
+// MAIN DRAW
+// =====================
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let i = 0; i < atoms.length; i++) {
-    drawAtom(atoms[i], i);
+    drawAtom(atoms[i]);
   }
 }
 
