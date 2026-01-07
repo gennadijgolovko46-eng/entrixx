@@ -1,5 +1,5 @@
 /* ===============================
-   ENTRIXX — MAIN (DIAGNOSTIC SAFE)
+   ENTRIXX — MAIN (ATOMS DEMO)
    =============================== */
 
 (function () {
@@ -7,16 +7,9 @@
 
   // ---- CANVAS ----
   const canvas = document.getElementById("canvas");
-  if (!canvas) {
-    console.error("Canvas not found");
-    return;
-  }
+  if (!canvas) return;
 
   const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    console.error("Context not found");
-    return;
-  }
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -28,38 +21,62 @@
   window.addEventListener("resize", resize);
   resize();
 
-  // ---- CLEAR ----
+  // ---- DEMO DATA ----
+  const atoms = [
+    { x: 0.30, y: 0.55, hold: 3, market: 18 },
+    { x: 0.34, y: 0.56, hold: 1, market: 14 },
+    { x: 0.38, y: 0.57, hold: 6, market: 22 },
+    { x: 0.52, y: 0.55, hold: 2, market: 26 },
+    { x: 0.66, y: 0.56, hold: 1, market: 9 }
+  ];
+
+  const ATOM_SIZE = 6;
+  const TAIL_SCALE = 2;
+  const MIN_TAIL = ATOM_SIZE;
+
+  function scaleTail(v) {
+    if (!v) return 0;
+    const abs = Math.abs(v * TAIL_SCALE);
+    return Math.max(abs, MIN_TAIL) * Math.sign(v);
+  }
+
+  function drawAtom(a) {
+    const x = a.x * canvas.width;
+    const y = a.y * canvas.height;
+
+    const hold = scaleTail(a.hold);
+    const market = scaleTail(a.market);
+
+    ctx.strokeStyle = "#2F6BFF";
+    ctx.beginPath();
+    ctx.moveTo(x - 2, y);
+    ctx.lineTo(x - 2, y - hold);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#2DBE60";
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y);
+    ctx.lineTo(x + 2, y - market);
+    ctx.stroke();
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(
+      x - ATOM_SIZE / 2,
+      y - ATOM_SIZE / 2,
+      ATOM_SIZE,
+      ATOM_SIZE
+    );
+  }
+
   function clear() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  // ---- DRAW LOOP ----
-  function draw() {
+  function render() {
     clear();
-
-    // === DIAGNOSTIC MARK ===
-    ctx.fillStyle = "red";
-    ctx.fillRect(50, 50, 120, 120);
-
-    // optional layers (safe)
-    if (typeof window.drawDensityLayer === "function") {
-      try { window.drawDensityLayer(ctx); } catch (e) {}
-    }
-
-    if (typeof window.drawAtoms === "function") {
-      try { window.drawAtoms(ctx); } catch (e) {}
-    }
-
-    if (typeof window.drawMarket === "function") {
-      try { window.drawMarket(ctx); } catch (e) {}
-    }
-
-    if (typeof window.drawBehavior === "function") {
-      try { window.drawBehavior(ctx); } catch (e) {}
-    }
-
-    requestAnimationFrame(draw);
+    atoms.forEach(drawAtom);
+    requestAnimationFrame(render);
   }
 
-  draw();
+  render();
 })();
