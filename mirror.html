@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <title>ENTRIXX — Mirror</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
 <style>
 html, body {
   margin: 0;
@@ -27,6 +28,7 @@ canvas {
 }
 </style>
 </head>
+
 <body>
 
 <canvas id="canvas"></canvas>
@@ -34,75 +36,78 @@ canvas {
 
 <script>
 /* ===============================
-   CONFIG
+   BASIC CANVAS
    =============================== */
-const ATOM_SIZE = 6;        // square size
-const SCALE = 2;            // visual scale for tails
-const MIN_TAIL = ATOM_SIZE; // minimum visible tail
-const CENTER_LINE = true;
 
-/* ===============================
-   CANVAS
-   =============================== */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resize);
 resize();
 
 /* ===============================
-   SAMPLE DATA (PROBE)
-   hold   = result of trade
-   market = market move after entry
+   ATOM CONFIG
    =============================== */
+
+const ATOM_SIZE = 6;
+const TAIL_SCALE = 2;
+const MIN_TAIL = ATOM_SIZE;
+
+/* ===============================
+   SAMPLE DATA
+   =============================== */
+
 const atoms = [
-  { x: 0.35, y: 0.55, hold: 3,  market: 18 },
-  { x: 0.37, y: 0.56, hold: 1,  market: 14 },
-  { x: 0.39, y: 0.57, hold: 6,  market: 22 },
-  { x: 0.50, y: 0.55, hold: 2,  market: 26 },
-  { x: 0.62, y: 0.56, hold: 1,  market: 9  }
+  { x: 0.30, y: 0.55, hold: 3, market: 18 },
+  { x: 0.34, y: 0.56, hold: 1, market: 14 },
+  { x: 0.38, y: 0.57, hold: 6, market: 22 },
+  { x: 0.52, y: 0.55, hold: 2, market: 26 },
+  { x: 0.66, y: 0.56, hold: 1, market: 9 }
 ];
 
 /* ===============================
    HELPERS
    =============================== */
-function scaledTail(value) {
-  if (value === 0) return 0;
-  const v = Math.abs(value * SCALE);
-  return Math.max(v, MIN_TAIL) * Math.sign(value);
+
+function scaleTail(v) {
+  if (v === 0) return 0;
+  const abs = Math.abs(v * TAIL_SCALE);
+  return Math.max(abs, MIN_TAIL) * Math.sign(v);
 }
 
 /* ===============================
    DRAW ATOM
    =============================== */
-function drawAtom(atom) {
-  const x = atom.x * canvas.width;
-  const y = atom.y * canvas.height;
 
-  const holdTail = scaledTail(atom.hold);
-  const marketTail = scaledTail(atom.market);
+function drawAtom(a) {
+  const x = a.x * canvas.width;
+  const y = a.y * canvas.height;
+
+  const hold = scaleTail(a.hold);
+  const market = scaleTail(a.market);
 
   // HOLD (blue)
-  ctx.strokeStyle = "#2b6cff";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x - 2, y);
-  ctx.lineTo(x - 2, y - holdTail);
+  ctx.lineTo(x - 2, y - hold);
   ctx.stroke();
 
   // MARKET (green)
-  ctx.strokeStyle = "#2fb56f";
+  ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + 2, y);
-  ctx.lineTo(x + 2, y - marketTail);
+  ctx.lineTo(x + 2, y - market);
   ctx.stroke();
 
-  // BODY (black square)
-  ctx.fillStyle = "#000000";
+  // BODY
+  ctx.fillStyle = "#000";
   ctx.fillRect(
     x - ATOM_SIZE / 2,
     y - ATOM_SIZE / 2,
@@ -112,29 +117,21 @@ function drawAtom(atom) {
 }
 
 /* ===============================
-   DRAW
+   RENDER
    =============================== */
-function draw() {
+
+function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // center line (time divider)
-  if (CENTER_LINE) {
-    ctx.strokeStyle = "rgba(200,0,0,0.6)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(canvas.width / 2, 0);
-    ctx.lineTo(canvas.width / 2, canvas.height);
-    ctx.stroke();
-  }
-
   atoms.forEach(drawAtom);
+  requestAnimationFrame(render);
 }
 
-draw();
+render();
 
 /* ===============================
    NAV
    =============================== */
+
 document.getElementById("back").onclick = () => {
   window.location.href = "/";
 };
