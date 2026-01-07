@@ -13,6 +13,7 @@ html, body {
   height: 100%;
   background: #ffffff;
   overflow: hidden;
+  font-family: system-ui, sans-serif;
 }
 canvas {
   display: block;
@@ -21,10 +22,10 @@ canvas {
   position: fixed;
   bottom: 18px;
   right: 18px;
-  font-family: system-ui, sans-serif;
   font-size: 13px;
   color: rgba(0,0,0,0.45);
   cursor: pointer;
+  user-select: none;
 }
 </style>
 </head>
@@ -36,7 +37,7 @@ canvas {
 
 <script>
 /* ===============================
-   BASIC CANVAS
+   CANVAS SETUP (SAFE)
    =============================== */
 
 const canvas = document.getElementById("canvas");
@@ -44,10 +45,14 @@ const ctx = canvas.getContext("2d");
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * dpr;
+
+  canvas.width  = window.innerWidth * dpr;
   canvas.height = window.innerHeight * dpr;
+
+  // логические координаты = CSS-пиксели
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+
 window.addEventListener("resize", resize);
 resize();
 
@@ -86,14 +91,16 @@ function scaleTail(v) {
    =============================== */
 
 function drawAtom(a) {
-  const x = a.x * canvas.width;
-  const y = a.y * canvas.height;
+  // ВАЖНО: используем CSS-размеры, а не canvas.width
+  const x = a.x * window.innerWidth;
+  const y = a.y * window.innerHeight;
 
-  const hold = scaleTail(a.hold);
+  const hold   = scaleTail(a.hold);
   const market = scaleTail(a.market);
 
   // HOLD (blue)
   ctx.strokeStyle = "#2F6BFF";
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x - 2, y);
   ctx.lineTo(x - 2, y - hold);
@@ -117,11 +124,11 @@ function drawAtom(a) {
 }
 
 /* ===============================
-   RENDER
+   RENDER LOOP
    =============================== */
 
 function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
   atoms.forEach(drawAtom);
   requestAnimationFrame(render);
 }
