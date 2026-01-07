@@ -1,71 +1,53 @@
+"use strict";
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-let W = 0;
-let H = 0;
-let BASE_Y = 0;
+let W = 0, H = 0;
 
-/* ===== CONFIG ===== */
-const TAIL_WIDTH = 2;
-const DOT_SIZE = 6;
-
-const OFFSET_BLUE = -2;
-const OFFSET_GREEN = 2;
-
-/* ===== COLORS ===== */
-const COLOR_BLUE = "rgba(40,90,255,0.45)";
-const COLOR_GREEN = "rgba(80,170,120,0.45)";
-const COLOR_BLACK = "#000";
-
-/* ===== DATA ===== */
-let points = [];
-
-/* ===== RESIZE ===== */
 function resize() {
   W = canvas.width = window.innerWidth;
   H = canvas.height = window.innerHeight;
-
-  BASE_Y = H * 0.72;
-
-  points = [
-    { x: W * 0.30, blue: 110, green: 160 },
-    { x: W * 0.50, blue: 80,  green: 120 },
-    { x: W * 0.70, blue: 140, green: 180 }
-  ];
-
-  draw();
 }
-
 window.addEventListener("resize", resize);
 resize();
 
-/* ===== DRAW ===== */
+/* TEST DATA */
+const atoms = [
+  { x: 0.30, hold: 90, market: 140 },
+  { x: 0.50, hold: 70, market: 110 },
+  { x: 0.70, hold: 110, market: 160 }
+];
+
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
-  points.forEach(p => {
-    // BLUE TAIL
-    ctx.strokeStyle = COLOR_BLUE;
-    ctx.lineWidth = TAIL_WIDTH;
+  const baseY = Math.floor(H * 0.75);
+
+  atoms.forEach(a => {
+    const cx = Math.floor(a.x * W);
+
+    /* blue (left) */
+    ctx.strokeStyle = "rgba(40,90,255,0.6)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(p.x + OFFSET_BLUE, BASE_Y);
-    ctx.lineTo(p.x + OFFSET_BLUE, BASE_Y - p.blue);
+    ctx.moveTo(cx - 3, baseY);
+    ctx.lineTo(cx - 3, baseY - a.hold);
     ctx.stroke();
 
-    // GREEN TAIL
-    ctx.strokeStyle = COLOR_GREEN;
+    /* green (right) */
+    ctx.strokeStyle = "rgba(40,170,120,0.6)";
     ctx.beginPath();
-    ctx.moveTo(p.x + OFFSET_GREEN, BASE_Y);
-    ctx.lineTo(p.x + OFFSET_GREEN, BASE_Y - p.green);
+    ctx.moveTo(cx + 3, baseY);
+    ctx.lineTo(cx + 3, baseY - a.market);
     ctx.stroke();
 
-    // BLACK DOT
-    ctx.fillStyle = COLOR_BLACK;
-    ctx.fillRect(
-      p.x - DOT_SIZE / 2,
-      BASE_Y - DOT_SIZE / 2,
-      DOT_SIZE,
-      DOT_SIZE
-    );
+    /* body */
+    ctx.fillStyle = "#000";
+    ctx.fillRect(cx - 3, baseY - 3, 6, 6);
   });
+
+  requestAnimationFrame(draw);
 }
+
+draw();
