@@ -16,6 +16,8 @@ html, body {
 }
 
 canvas {
+  position: absolute;
+  inset: 0;
   display: block;
 }
 
@@ -33,109 +35,11 @@ canvas {
 
 <body>
 
-<canvas id="canvas"></canvas>
-<div id="back">back</div>
+<canvas id="layer1"></canvas>
 
-<script>
-/* ===== CANVAS ===== */
+<div id="back" onclick="location.href='/'">back</div>
 
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-function resize() {
-  const dpr = window.devicePixelRatio || 1;
-
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-window.addEventListener("resize", resize);
-resize();
-
-/* ===== CONFIG ===== */
-
-const ATOM_SIZE = 6;
-const TAIL_SCALE = 2;
-const MIN_TAIL = ATOM_SIZE;
-
-/* ===== DATA ===== */
-
-const atoms = [
-  { x: 0.25, y: 0.55, hold: 3, market: 12 },
-  { x: 0.40, y: 0.56, hold: 1, market: 8  },
-  { x: 0.55, y: 0.55, hold: 4, market: 16 }
-];
-
-/* ===== HELPERS ===== */
-
-function scaleTail(v) {
-  if (v === 0) return 0;
-  const abs = Math.abs(v * TAIL_SCALE);
-  return Math.max(abs, MIN_TAIL) * Math.sign(v);
-}
-
-/* ===== DRAW ===== */
-
-function drawAtom(a) {
-  const W = canvas.clientWidth;
-  const H = canvas.clientHeight;
-
-  const x = a.x * W;
-  const y = a.y * H;
-
-  const hold = scaleTail(a.hold);
-  const market = scaleTail(a.market);
-
-  ctx.lineWidth = 1;
-
-  /* HOLD (blue) */
-  ctx.strokeStyle = "rgba(40,90,255,0.45)";
-  ctx.beginPath();
-  ctx.moveTo(x - 2, y);
-  ctx.lineTo(x - 2, y - hold);
-  ctx.stroke();
-
-  /* MARKET (green) */
-  ctx.strokeStyle = "rgba(45,190,96,0.45)";
-  ctx.beginPath();
-  ctx.moveTo(x + 2, y);
-  ctx.lineTo(x + 2, y - market);
-  ctx.stroke();
-
-  /* BODY */
-  ctx.fillStyle = "#000000";
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
-}
-
-/* ===== RENDER ===== */
-
-function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (const a of atoms) drawAtom(a);
-  requestAnimationFrame(render);
-}
-
-render();
-
-/* ===== NAV ===== */
-
-document.getElementById("back").onclick = () => {
-  window.location.href = "/";
-};
-</script>
+<script src="main.js"></script>
 
 </body>
 </html>
