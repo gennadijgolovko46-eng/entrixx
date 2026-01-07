@@ -31,17 +31,30 @@ canvas { display: block; }
   font: 12px system-ui, sans-serif;
   color: rgba(0,0,0,0.45);
 }
+
+#time {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.9);
+  opacity: 0;
+  pointer-events: none;
+}
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
 <div id="back">Back</div>
+<div id="time"></div>
 <div id="date"></div>
 
 <script>
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
+const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
 const now = new Date();
@@ -68,21 +81,42 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* model geometry */
+/* time interaction */
+let touchX = null;
+
+canvas.addEventListener("pointerdown", e => {
+  touchX = e.clientX;
+});
+canvas.addEventListener("pointermove", e => {
+  if (touchX !== null) touchX = e.clientX;
+});
+canvas.addEventListener("pointerup", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
+canvas.addEventListener("pointerleave", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
+
+function xToTime(x) {
+  const minutes = Math.round((x / W) * 1440);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+}
+
+/* model */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
+const MARKET_HEIGHT = 160;
 
-/* colors */
 const COLOR_BLUE = "#2F6BFF";
 const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-/* fixed market window (8h visual) */
-const MARKET_HEIGHT = 160;
-
-/* demo data */
 const atoms = [
   { hold: 40,  dir: -1 },
   { hold: 90,  dir: 1  },
@@ -108,7 +142,6 @@ function drawAtom(x, y, a) {
 
   ctx.lineWidth = TAIL_WIDTH;
 
-  /* market tail */
   ctx.strokeStyle = COLOR_GREEN;
   ctx.beginPath();
   ctx.moveTo(x + ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
@@ -118,7 +151,6 @@ function drawAtom(x, y, a) {
   );
   ctx.stroke();
 
-  /* blue tail */
   if (!a.liquid) {
     const blueLen = Math.max(a.hold, MIN_BLUE);
     ctx.strokeStyle = COLOR_BLUE;
@@ -131,7 +163,6 @@ function drawAtom(x, y, a) {
     ctx.stroke();
   }
 
-  /* entry point */
   ctx.fillStyle = COLOR_BLACK;
   ctx.fillRect(
     x - ATOM_SIZE / 2,
@@ -140,9 +171,21 @@ function drawAtom(x, y, a) {
     ATOM_SIZE
   );
 
-  if (a.liquid) {
-    drawLiquidation(x, y);
-  }
+  if (a.liquid) drawLiquidation(x, y);
+}
+
+function drawTime() {
+  if (touchX === null) return;
+
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(touchX, 0);
+  ctx.lineTo(touchX, H);
+  ctx.stroke();
+
+  timeEl.textContent = xToTime(touchX);
+  timeEl.style.opacity = 1;
 }
 
 function render() {
@@ -156,6 +199,7 @@ function render() {
     drawAtom(startX + i * gap, baseY, atoms[i]);
   }
 
+  drawTime();
   requestAnimationFrame(render);
 }
 
