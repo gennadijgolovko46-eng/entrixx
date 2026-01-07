@@ -2,14 +2,6 @@
    ENTRIXX - MIRROR RENDER (V1)
    =============================== */
 
-/*
-RULES (FIXED):
-- Atom is a square
-- Tails start only from the top edge of the square
-- No tails from center
-- Single renderer only
-*/
-
 // =====================
 // CANVAS SETUP
 // =====================
@@ -52,7 +44,8 @@ function drawAtom(atom) {
   const baseX = atom.x * canvas.width;
   const baseY = atom.y * canvas.height;
 
-  const squareTopY = baseY - ATOM_SIZE / 2;
+  // Pixel-aligned top edge
+  const squareTopY = Math.round(baseY - ATOM_SIZE / 2) + 0.5;
 
   // HOLD tail (left)
   ctx.strokeStyle = COLOR_HOLD;
@@ -73,8 +66,8 @@ function drawAtom(atom) {
   // ATOM body
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
-    baseX - ATOM_SIZE / 2,
-    baseY - ATOM_SIZE / 2,
+    Math.round(baseX - ATOM_SIZE / 2),
+    Math.round(baseY - ATOM_SIZE / 2),
     ATOM_SIZE,
     ATOM_SIZE
   );
