@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>ENTRIXX — Mirror (ISOLATION)</title>
+<title>ENTRIXX — Mirror</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
 <style>
 html, body {
   margin: 0;
@@ -13,17 +14,21 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-canvas { display: block; }
+canvas {
+  display: block;
+}
 #back {
   position: fixed;
-  right: 18px;
   bottom: 18px;
+  right: 18px;
+  font-family: system-ui, sans-serif;
   font-size: 13px;
-  color: rgba(0,0,0,0.4);
+  color: rgba(0,0,0,0.45);
   cursor: pointer;
 }
 </style>
 </head>
+
 <body>
 
 <canvas id="canvas"></canvas>
@@ -33,8 +38,8 @@ canvas { display: block; }
 <script src="main.js"></script>
 
 <script>
-document.getElementById("back").onclick = () => {
-  location.href = "/";
+document.getElementById("back").onclick = function () {
+  window.location.href = "/";
 };
 </script>
 
