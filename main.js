@@ -38,23 +38,26 @@ function draw() {
     const baseX = a.x;
     const baseY = a.y;
 
+    // top edge of the square — ONLY valid tail start
+    const squareTopY = baseY - ATOM_SIZE / 2;
+
     // HOLD tail (left)
     ctx.strokeStyle = COLOR_HOLD;
     ctx.lineWidth = TAIL_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(baseX - TAIL_OFFSET_X, baseY);
-    ctx.lineTo(baseX - TAIL_OFFSET_X, baseY - a.hold);
+    ctx.moveTo(baseX - TAIL_OFFSET_X, squareTopY);
+    ctx.lineTo(baseX - TAIL_OFFSET_X, squareTopY - a.hold);
     ctx.stroke();
 
     // MARKET tail (right)
     ctx.strokeStyle = COLOR_MARKET;
     ctx.lineWidth = TAIL_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(baseX + TAIL_OFFSET_X, baseY);
-    ctx.lineTo(baseX + TAIL_OFFSET_X, baseY - a.market);
+    ctx.moveTo(baseX + TAIL_OFFSET_X, squareTopY);
+    ctx.lineTo(baseX + TAIL_OFFSET_X, squareTopY - a.market);
     ctx.stroke();
 
-    // ATOM (center)
+    // ATOM (anchor)
     ctx.fillStyle = "#000";
     ctx.fillRect(
       baseX - ATOM_SIZE / 2,
