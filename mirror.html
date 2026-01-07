@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>ENTRIXX MIRROR STEP 3</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<meta charset="UTF-8" />
+<title>ENTRIXX — Mirror</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 html, body {
   margin: 0;
@@ -14,63 +13,23 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-canvas {
-  display: block;
-}
+canvas { display: block; }
 #back {
   position: fixed;
   right: 18px;
   bottom: 18px;
-  font-family: system-ui, sans-serif;
   font-size: 13px;
-  color: rgba(0,0,0,0.45);
+  color: rgba(0,0,0,0.4);
 }
 </style>
 </head>
-
 <body>
 
 <canvas id="canvas"></canvas>
 <div id="back">back</div>
 
-<script>
-/* ==== CANVAS INIT ==== */
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resize);
-resize();
-
-/* ==== TEST DRAW ==== */
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // black body
-  ctx.fillStyle = "#000";
-  ctx.fillRect(200, 300, 6, 6);
-
-  // blue tail
-  ctx.strokeStyle = "rgba(40,90,255,0.45)";
-  ctx.beginPath();
-  ctx.moveTo(203, 300);
-  ctx.lineTo(203, 240);
-  ctx.stroke();
-
-  // green tail
-  ctx.strokeStyle = "rgba(60,180,120,0.45)";
-  ctx.beginPath();
-  ctx.moveTo(207, 300);
-  ctx.lineTo(207, 200);
-  ctx.stroke();
-
-  requestAnimationFrame(draw);
-}
-draw();
-</script>
+<script src="atoms.js"></script>
+<script src="main.js"></script>
 
 </body>
 </html>
