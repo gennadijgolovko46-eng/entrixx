@@ -42,10 +42,17 @@ canvas {
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
+let W = 0;
+let H = 0;
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * dpr;
-  canvas.height = window.innerHeight * dpr;
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resize);
@@ -68,29 +75,27 @@ const density = [
    =============================== */
 
 function drawDensity() {
-  const h = canvas.height;
-  const w = canvas.width;
-
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.strokeStyle = "rgba(0,0,0,0.4)";
   ctx.lineWidth = 4;
 
   density.forEach(d => {
-    const x = d.x * w;
-    const height = d.value * 20;
+    const x = d.x * W;
+    const y0 = H * 0.7;
+    const y1 = y0 - d.value * 20;
 
     ctx.beginPath();
-    ctx.moveTo(x, h * 0.7);
-    ctx.lineTo(x, h * 0.7 - height);
+    ctx.moveTo(x, y0);
+    ctx.lineTo(x, y1);
     ctx.stroke();
   });
 }
 
 /* ===============================
-   RENDER LOOP
+   RENDER
    =============================== */
 
 function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, W, H);
   drawDensity();
   requestAnimationFrame(render);
 }
