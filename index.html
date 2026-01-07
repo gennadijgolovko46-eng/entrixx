@@ -17,7 +17,7 @@
     display: block;
   }
 
-  /* Date label (always visible, bottom) */
+  /* Date (always visible, bottom) */
   #date {
     position: fixed;
     bottom: 8px;
@@ -29,7 +29,7 @@
     white-space: nowrap;
   }
 
-  /* Time label (touch only, top, higher contrast) */
+  /* Time (touch only, top) */
   #time-float {
     position: fixed;
     top: 8px;
@@ -52,7 +52,7 @@
 <script>
 /* ===============================
    ENTRIXX V1
-   One-day scene skeleton
+   One Atom Test
    =============================== */
 
 const canvas = document.getElementById("scene");
@@ -61,7 +61,7 @@ const ctx = canvas.getContext("2d");
 const dateLabel = document.getElementById("date");
 const timeFloat = document.getElementById("time-float");
 
-/* ---------- Date (always visible) ---------- */
+/* ---------- Date ---------- */
 const now = new Date();
 dateLabel.textContent = now.toLocaleDateString("en-US", {
   weekday: "long",
@@ -70,7 +70,7 @@ dateLabel.textContent = now.toLocaleDateString("en-US", {
   year: "numeric"
 });
 
-/* ---------- DPR-safe resize ---------- */
+/* ---------- Resize (DPR-safe) ---------- */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
@@ -83,46 +83,104 @@ function resize() {
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-
 window.addEventListener("resize", resize);
 resize();
 
-/* ---------- Gesture state ---------- */
+/* ---------- Gesture ---------- */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => {
   touchX = e.clientX;
 });
-
 canvas.addEventListener("pointermove", e => {
-  if (touchX !== null) {
-    touchX = e.clientX;
-  }
+  if (touchX !== null) touchX = e.clientX;
 });
-
 canvas.addEventListener("pointerup", () => {
   touchX = null;
 });
-
 canvas.addEventListener("pointerleave", () => {
   touchX = null;
 });
 
-/* ---------- X to time (24h) ---------- */
+/* ---------- X -> Time ---------- */
 function xToTime(x) {
   const ratio = x / window.innerWidth;
-  const totalMinutes = Math.round(ratio * 24 * 60);
+  const totalMinutes = Math.round(ratio * 1440);
   const h = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
   const m = String(totalMinutes % 60).padStart(2, "0");
   return h + ":" + m;
 }
 
-/* ---------- Layers (empty by design) ---------- */
-function layerDensity() {}
-function layerTrades() {}
-function layerLiquidations() {}
-function layerBehavior() {}
-function layerState() {}
+/* ===============================
+   ATOM CONFIG (TEST)
+   =============================== */
+
+// Exit time in minutes from day start (example: 10:30)
+const ATOM_TIME_MIN = 10 * 60 + 30;
+
+// Visual baseline (middle of screen)
+const BASELINE_Y = 0.55;
+
+// Geometry
+const ATOM_SIZE = 6;
+const TAIL_WIDTH = 1;
+
+// Colors
+const HOLD_COLOR   = "rgba(47,107,255,0.85)";
+const MARKET_COLOR = "rgba(45,190,96,0.85)";
+const ATOM_COLOR   = "#000000";
+
+// Values (px)
+// Positive = up, Negative = down
+const HOLD_VALUE   = 40;    // minimal visible fact
+const MARKET_VALUE = -120;  // 8h market move
+
+const MIN_HOLD = 4;
+
+/* ===============================
+   LAYERS
+   =============================== */
+
+function layerTrades() {
+  const x = (ATOM_TIME_MIN / 1440) * window.innerWidth;
+  const baseY = BASELINE_Y * canvas.height;
+
+  const topY = baseY - ATOM_SIZE / 2;
+  const bottomY = baseY + ATOM_SIZE / 2;
+
+  ctx.lineWidth = TAIL_WIDTH;
+
+  // HOLD (blue)
+  const holdSign = Math.sign(HOLD_VALUE) || 1;
+  const holdAbs = Math.max(Math.abs(HOLD_VALUE), MIN_HOLD);
+  const holdEndY = holdSign > 0 ? topY - holdAbs : bottomY + holdAbs;
+
+  ctx.strokeStyle = HOLD_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(x - ATOM_SIZE / 2, holdSign > 0 ? topY : bottomY);
+  ctx.lineTo(x - ATOM_SIZE / 2, holdEndY);
+  ctx.stroke();
+
+  // MARKET (green)
+  const marketSign = Math.sign(MARKET_VALUE) || 1;
+  const marketAbs = Math.abs(MARKET_VALUE);
+  const marketEndY = marketSign > 0 ? topY - marketAbs : bottomY + marketAbs;
+
+  ctx.strokeStyle = MARKET_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(x + ATOM_SIZE / 2, marketSign > 0 ? topY : bottomY);
+  ctx.lineTo(x + ATOM_SIZE / 2, marketEndY);
+  ctx.stroke();
+
+  // ATOM (square)
+  ctx.fillStyle = ATOM_COLOR;
+  ctx.fillRect(
+    x - ATOM_SIZE / 2,
+    baseY - ATOM_SIZE / 2,
+    ATOM_SIZE,
+    ATOM_SIZE
+  );
+}
 
 function layerTimeMarker() {
   if (touchX === null) {
@@ -141,15 +199,11 @@ function layerTimeMarker() {
   timeFloat.style.opacity = 1;
 }
 
-/* ---------- Render loop ---------- */
+/* ---------- Render ---------- */
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  layerDensity();
   layerTrades();
-  layerLiquidations();
-  layerBehavior();
-  layerState();
   layerTimeMarker();
 
   requestAnimationFrame(render);
