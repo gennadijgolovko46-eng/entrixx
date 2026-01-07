@@ -1,64 +1,61 @@
-/* ===============================
-   ENTRIXX — MIRROR (MAIN)
-   =============================== */
-
-/* ===== CONFIG ===== */
-const POINT_SIZE = 6;
-const BASE_Y = 0.78;
-const SCALE_Y = 0.45;
-const SPREAD_X = 14;
-
-/* ===== DATA (test) ===== */
-const points = [
-  { x: 0.25, blue: 0.55, green: 0.75 },
-  { x: 0.50, blue: 0.40, green: 0.60 },
-  { x: 0.75, blue: 0.70, green: 0.90 }
-];
-
-/* ===== CANVAS ===== */
-const canvas = document.getElementById("layer1");
+const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
+let W, H;
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
 }
 window.addEventListener("resize", resize);
 resize();
 
+/* ===== CONFIG ===== */
+const BASE_Y = H * 0.72;
+const TAIL_WIDTH = 2;
+const DOT_SIZE = 6;
+
+const OFFSET_BLUE = -2;
+const OFFSET_GREEN = 2;
+
+/* ===== COLORS ===== */
+const COLOR_BLUE = "rgba(40,90,255,0.45)";
+const COLOR_GREEN = "rgba(80,170,120,0.45)";
+const COLOR_BLACK = "#000";
+
+/* ===== TEST DATA ===== */
+const points = [
+  { x: W * 0.30, blue: 110, green: 160 },
+  { x: W * 0.50, blue: 80,  green: 120 },
+  { x: W * 0.70, blue: 140, green: 180 }
+];
+
 /* ===== DRAW ===== */
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, W, H);
 
   points.forEach(p => {
-    const cx = p.x * canvas.width;
-    const baseY = BASE_Y * canvas.height;
-
-    const blueY  = baseY - p.blue  * SCALE_Y * canvas.height;
-    const greenY = baseY - p.green * SCALE_Y * canvas.height;
-
-    /* blue tail (left) */
-    ctx.strokeStyle = "rgba(40,90,255,0.45)";
-    ctx.lineWidth = 2;
+    // BLUE TAIL
+    ctx.strokeStyle = COLOR_BLUE;
+    ctx.lineWidth = TAIL_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(cx - SPREAD_X, baseY);
-    ctx.lineTo(cx - SPREAD_X, blueY);
+    ctx.moveTo(p.x + OFFSET_BLUE, BASE_Y);
+    ctx.lineTo(p.x + OFFSET_BLUE, BASE_Y - p.blue);
     ctx.stroke();
 
-    /* green tail (right) */
-    ctx.strokeStyle = "rgba(80,170,120,0.45)";
+    // GREEN TAIL
+    ctx.strokeStyle = COLOR_GREEN;
     ctx.beginPath();
-    ctx.moveTo(cx + SPREAD_X, baseY);
-    ctx.lineTo(cx + SPREAD_X, greenY);
+    ctx.moveTo(p.x + OFFSET_GREEN, BASE_Y);
+    ctx.lineTo(p.x + OFFSET_GREEN, BASE_Y - p.green);
     ctx.stroke();
 
-    /* base point */
-    ctx.fillStyle = "#000";
+    // BLACK DOT (ANCHOR)
+    ctx.fillStyle = COLOR_BLACK;
     ctx.fillRect(
-      cx - POINT_SIZE / 2,
-      baseY - POINT_SIZE / 2,
-      POINT_SIZE,
-      POINT_SIZE
+      p.x - DOT_SIZE / 2,
+      BASE_Y - DOT_SIZE / 2,
+      DOT_SIZE,
+      DOT_SIZE
     );
   });
 }
