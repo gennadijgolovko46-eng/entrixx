@@ -13,19 +13,20 @@ html, body {
   height: 100%;
   background: #ffffff;
   overflow: hidden;
-  font-family: system-ui, sans-serif;
 }
+
 canvas {
   display: block;
 }
+
 #back {
   position: fixed;
   bottom: 18px;
   right: 18px;
+  font-family: system-ui, sans-serif;
   font-size: 13px;
   color: rgba(0,0,0,0.45);
   cursor: pointer;
-  user-select: none;
 }
 </style>
 </head>
@@ -36,77 +37,52 @@ canvas {
 <div id="back">back</div>
 
 <script>
-/* ===============================
-   CANVAS SETUP (SAFE)
-   =============================== */
+"use strict";
 
+/* ===== CANVAS ===== */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width  = window.innerWidth * dpr;
-  canvas.height = window.innerHeight * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
 }
-
 window.addEventListener("resize", resize);
 resize();
 
-/* ===============================
-   ATOM CONFIG
-   =============================== */
+/* ===== TEST DRAW (MUST BE VISIBLE) ===== */
+ctx.fillStyle = "red";
+ctx.fillRect(0, 0, 100, 100);
 
+/* ===== SAMPLE ATOMS ===== */
 const ATOM_SIZE = 6;
-const TAIL_SCALE = 2;
-const MIN_TAIL = ATOM_SIZE;
-
-/* ===============================
-   SAMPLE DATA
-   =============================== */
 
 const atoms = [
-  { x: 0.30, y: 0.55, hold: 3, market: 18 },
-  { x: 0.34, y: 0.56, hold: 1, market: 14 },
-  { x: 0.38, y: 0.57, hold: 6, market: 22 },
-  { x: 0.52, y: 0.55, hold: 2, market: 26 },
-  { x: 0.66, y: 0.56, hold: 1, market: 9 }
+  { x: 0.3, y: 0.55, hold: 40, market: 120 },
+  { x: 0.36, y: 0.56, hold: 20, market: 80 },
+  { x: 0.42, y: 0.57, hold: 60, market: 160 }
 ];
 
-/* ===============================
-   HELPERS
-   =============================== */
-
-function scaleTail(v) {
-  if (v === 0) return 0;
-  const abs = Math.abs(v * TAIL_SCALE);
-  return Math.max(abs, MIN_TAIL) * Math.sign(v);
-}
-
-/* ===============================
-   DRAW ATOM
-   =============================== */
-
+/* ===== DRAW ===== */
 function drawAtom(a) {
-  const x = a.x * window.innerWidth;
-  const y = a.y * window.innerHeight;
+  const x = a.x * canvas.width;
+  const y = a.y * canvas.height;
 
-  const hold   = scaleTail(a.hold);
-  const market = scaleTail(a.market);
-
+  // hold (blue)
   ctx.strokeStyle = "#2F6BFF";
-  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x - 2, y);
-  ctx.lineTo(x - 2, y - hold);
+  ctx.lineTo(x - 2, y - a.hold);
   ctx.stroke();
 
+  // market (green)
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + 2, y);
-  ctx.lineTo(x + 2, y - market);
+  ctx.lineTo(x + 2, y - a.market);
   ctx.stroke();
 
+  // body
   ctx.fillStyle = "#000";
   ctx.fillRect(
     x - ATOM_SIZE / 2,
@@ -116,22 +92,17 @@ function drawAtom(a) {
   );
 }
 
-/* ===============================
-   RENDER LOOP
-   =============================== */
-
 function render() {
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   atoms.forEach(drawAtom);
+
   requestAnimationFrame(render);
 }
 
 render();
 
-/* ===============================
-   NAV
-   =============================== */
-
+/* ===== NAV ===== */
 document.getElementById("back").onclick = () => {
   window.location.href = "/";
 };
