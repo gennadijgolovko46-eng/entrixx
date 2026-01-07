@@ -33,10 +33,9 @@
       position: fixed;
       right: 16px;
       bottom: 16px;
-      font-size: 12px;
+      font-size: 13px;
       color: rgba(0,0,0,0.4);
-      cursor: pointer;
-      user-select: none;
+      text-decoration: none;
     }
   </style>
 </head>
@@ -48,11 +47,13 @@
     <canvas id="layer3"></canvas>
   </div>
 
-  <div id="back">back</div>
+  <a id="back" href="mirror.html">back</a>
 
-  <!-- LAYERS ONLY -->
-  <script src="layer-atoms.js"></script>
-  <script src="layer-behavior.js"></script>
+  <!-- ВАЖНО: порядок -->
+  <script src="time.js"></script>
+  <script src="hold.js"></script>
+  <script src="market.js"></script>
   <script src="layer-density.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
