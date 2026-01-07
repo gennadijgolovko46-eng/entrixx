@@ -2,23 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ENTRIXX</title>
 
 <style>
 html, body {
   margin: 0;
   padding: 0;
-  background: #ffffff;
+  background: #fff;
   overflow: hidden;
-  touch-action: none;
-  overscroll-behavior: none;
 }
-
-canvas {
-  display: block;
-  touch-action: none;
-}
+canvas { display: block; }
 
 #date {
   position: fixed;
@@ -40,6 +34,19 @@ canvas {
   pointer-events: none;
   opacity: 0;
 }
+
+#back {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.35);
+  cursor: pointer;
+  user-select: none;
+}
+#back:active {
+  opacity: 0.6;
+}
 </style>
 </head>
 <body>
@@ -47,140 +54,131 @@ canvas {
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
+<div id="back">Back</div>
 
 <script>
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
+const backEl = document.getElementById("back");
 
-const now = new Date();
-dateEl.textContent = now.toLocaleDateString("en-US", {
+/* Back (stub) */
+backEl.onclick = () => {
+  console.log("back");
+};
+
+/* Date */
+dateEl.textContent = new Date().toLocaleDateString("en-US", {
   weekday: "long",
   month: "short",
   day: "numeric",
   year: "numeric"
 });
 
-let viewW = 0;
-let viewH = 0;
-
+/* Resize */
+let viewW = 0, viewH = 0;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   viewW = window.innerWidth;
   viewH = window.innerHeight;
-
-  canvas.width = Math.round(viewW * dpr);
-  canvas.height = Math.round(viewH * dpr);
+  canvas.width = viewW * dpr;
+  canvas.height = viewH * dpr;
   canvas.style.width = viewW + "px";
   canvas.style.height = viewH + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 window.addEventListener("resize", resize);
 resize();
 
+/* Touch → time */
 let touchX = null;
+canvas.addEventListener("pointerdown", e => touchX = e.clientX);
+canvas.addEventListener("pointermove", e => { if (touchX!==null) touchX=e.clientX; });
+canvas.addEventListener("pointerup", ()=>touchX=null);
+canvas.addEventListener("pointerleave", ()=>touchX=null);
 
-canvas.addEventListener("pointerdown", e => {
-  e.preventDefault();
-  touchX = e.clientX;
-});
-
-canvas.addEventListener("pointermove", e => {
-  e.preventDefault();
-  if (touchX !== null) touchX = e.clientX;
-});
-
-canvas.addEventListener("pointerup", e => {
-  e.preventDefault();
-  touchX = null;
-});
-
-canvas.addEventListener("pointercancel", e => {
-  e.preventDefault();
-  touchX = null;
-});
-
-function xToTime(x) {
-  const m = Math.round((x / viewW) * 1440);
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+function xToTime(x){
+  const m = Math.round((x/viewW)*1440);
+  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
 
-const ATOM_SIZE = 3;
-const TAIL_W = 1;
-
+/* ===== ATOMS ===== */
+const ATOM = 4;
 const HOLD_COLOR = "#2F6BFF";
 const MARKET_COLOR = "#2DBE60";
-const ATOM_COLOR = "#000";
 
 const atoms = [
-  { x: 0.48, hold: 60,  market: 140 },
-  { x: 0.49, hold: 30,  market: 90  },
-  { x: 0.50, hold: 80,  market: 160 },
-  { x: 0.51, hold: 20,  market: 70  },
-  { x: 0.52, hold: 50,  market: 120 }
+  {x:0.46, hold:80,  market:120},
+  {x:0.48, hold:40,  market:90},
+  {x:0.50, liquidated:true},
+  {x:0.52, hold:60,  market:110},
+  {x:0.54, hold:30,  market:70}
 ];
 
-function drawAtom(a) {
+function drawCross(x,y){
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x-4,y-4);
+  ctx.lineTo(x+4,y+4);
+  ctx.moveTo(x+4,y-4);
+  ctx.lineTo(x-4,y+4);
+  ctx.stroke();
+}
+
+function drawAtom(a){
   const x = a.x * viewW;
   const y = viewH * 0.5;
 
-  const top = y - ATOM_SIZE / 2;
-
-  ctx.lineWidth = TAIL_W;
-
-  ctx.strokeStyle = HOLD_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(x - 2, top);
-  ctx.lineTo(x - 2, top - a.hold);
-  ctx.stroke();
-
-  ctx.strokeStyle = MARKET_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(x + 2, top);
-  ctx.lineTo(x + 2, top - a.market);
-  ctx.stroke();
-
-  ctx.fillStyle = ATOM_COLOR;
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
-}
-
-function drawTime() {
-  if (touchX === null) {
-    timeEl.style.opacity = 0;
+  if (a.liquidated){
+    drawCross(x,y);
     return;
   }
 
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.beginPath();
-  ctx.moveTo(touchX, 0);
-  ctx.lineTo(touchX, viewH);
-  ctx.stroke();
+  ctx.lineWidth = 1;
 
-  timeEl.textContent = xToTime(touchX);
-  timeEl.style.opacity = 1;
-}
-
-function render() {
-  ctx.clearRect(0, 0, viewW, viewH);
-
-  for (let i = 0; i < atoms.length; i++) {
-    drawAtom(atoms[i]);
+  if (a.hold){
+    ctx.strokeStyle = HOLD_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(x-ATOM,y);
+    ctx.lineTo(x-ATOM,y-a.hold);
+    ctx.stroke();
   }
 
-  drawTime();
-  requestAnimationFrame(render);
+  if (a.market){
+    ctx.strokeStyle = MARKET_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(x+ATOM,y);
+    ctx.lineTo(x+ATOM,y-a.market);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle="#000";
+  ctx.fillRect(x-ATOM/2,y-ATOM/2,ATOM,ATOM);
 }
 
+/* Render */
+function render(){
+  ctx.clearRect(0,0,viewW,viewH);
+
+  atoms.forEach(drawAtom);
+
+  if (touchX!==null){
+    ctx.strokeStyle="rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.moveTo(touchX,0);
+    ctx.lineTo(touchX,viewH);
+    ctx.stroke();
+    timeEl.textContent = xToTime(touchX);
+    timeEl.style.opacity=1;
+  } else {
+    timeEl.style.opacity=0;
+  }
+
+  requestAnimationFrame(render);
+}
 render();
 </script>
-
 </body>
 </html>
