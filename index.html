@@ -23,29 +23,16 @@ canvas { display: block; }
   color: rgba(0,0,0,0.45);
   pointer-events: none;
 }
-
-#time {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.9);
-  pointer-events: none;
-  opacity: 0;
-}
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
-<div id="time"></div>
 <div id="date"></div>
 
 <script>
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
 /* Date */
@@ -58,105 +45,98 @@ dateEl.textContent = d.toLocaleDateString("en-US", {
 });
 
 /* Resize */
-let viewW = 0;
-let viewH = 0;
+let W = 0;
+let H = 0;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  viewW = window.innerWidth;
-  viewH = window.innerHeight;
+  W = window.innerWidth;
+  H = window.innerHeight;
 
-  canvas.width = Math.round(viewW * dpr);
-  canvas.height = Math.round(viewH * dpr);
-  canvas.style.width = viewW + "px";
-  canvas.style.height = viewH + "px";
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resize);
 resize();
 
-/* Touch */
-let touchX = null;
-canvas.addEventListener("pointerdown", e => touchX = e.clientX);
-canvas.addEventListener("pointermove", e => { if (touchX !== null) touchX = e.clientX; });
-canvas.addEventListener("pointerup", () => touchX = null);
-canvas.addEventListener("pointerleave", () => touchX = null);
-
-/* X -> time */
-function xToTime(x) {
-  const m = Math.round((x / viewW) * 1440);
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
-}
-
-/* ===== ATOM (BOTH UP) ===== */
-const ATOM_SIZE = 2;
+/* ===== ATOM CONFIG ===== */
+const ATOM = 3;
 const TAIL_W = 1;
-const BASE_Y = () => Math.round(viewH * 0.5);
 
-const HOLD_COLOR = "#2F6BFF";
+const HOLD_COLOR   = "#2F6BFF";
 const MARKET_COLOR = "#2DBE60";
-const ATOM_COLOR = "#000";
+const ATOM_COLOR   = "#000";
 
-const HOLD = 120;     // UP
-const MARKET = 200;  // UP
+/* ===== TEST DATA: 10 ATOMS ===== */
+const atoms = [
+  { hold:  40, market: 120 },
+  { hold:  20, market:  80 },
+  { hold: -30, market: 100 },
+  { hold:  10, market:  60 },
+  { hold:  50, market: 140 },
 
-const HOLD_OFFSET_X = -2;
-const MARKET_OFFSET_X = 2;
+  { hold: -20, market: -90 },
+  { hold:  30, market: -60 },
+  { hold: -10, market: -40 },
+  { hold:  15, market: -80 },
+  { hold:  25, market:  70 }
+];
 
-function drawAtom() {
-  const x = Math.round(viewW * 0.5);
-  const y = BASE_Y();
-  const half = ATOM_SIZE / 2;
+/* ===== DRAW ATOM ===== */
+function drawAtom(x, y, hold, market, i) {
+  const jitter = (i % 3 - 1); // -1,0,1
+  const top = y - ATOM / 2;
+  const bottom = y + ATOM / 2;
 
   ctx.lineWidth = TAIL_W;
 
-  // HOLD (blue, up)
-  ctx.strokeStyle = HOLD_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(x + HOLD_OFFSET_X, y);
-  ctx.lineTo(x + HOLD_OFFSET_X, y - HOLD);
-  ctx.stroke();
+  if (hold !== 0) {
+    const s = Math.sign(hold) || 1;
+    ctx.strokeStyle = HOLD_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(x - 2 + jitter, s > 0 ? top : bottom);
+    ctx.lineTo(x - 2 + jitter, s > 0 ? top - Math.abs(hold) : bottom + Math.abs(hold));
+    ctx.stroke();
+  }
 
-  // MARKET (green, up)
-  ctx.strokeStyle = MARKET_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(x + MARKET_OFFSET_X, y);
-  ctx.lineTo(x + MARKET_OFFSET_X, y - MARKET);
-  ctx.stroke();
+  if (market !== 0) {
+    const s = Math.sign(market) || 1;
+    ctx.strokeStyle = MARKET_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(x + 2 + jitter, s > 0 ? top : bottom);
+    ctx.lineTo(x + 2 + jitter, s > 0 ? top - Math.abs(market) : bottom + Math.abs(market));
+    ctx.stroke();
+  }
 
-  // ATOM BODY
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
-    Math.round(x - half),
-    Math.round(y - half),
-    ATOM_SIZE,
-    ATOM_SIZE
+    Math.round(x - ATOM / 2),
+    Math.round(y - ATOM / 2),
+    ATOM,
+    ATOM
   );
 }
 
-/* Time marker */
-function drawTime() {
-  if (touchX === null) {
-    timeEl.style.opacity = 0;
-    return;
-  }
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.beginPath();
-  ctx.moveTo(touchX, 0);
-  ctx.lineTo(touchX, viewH);
-  ctx.stroke();
-
-  timeEl.textContent = xToTime(touchX);
-  timeEl.style.opacity = 1;
-}
-
-/* Render */
+/* ===== RENDER ===== */
 function render() {
-  ctx.clearRect(0,0,viewW,viewH);
-  drawAtom();
-  drawTime();
+  ctx.clearRect(0, 0, W, H);
+
+  const baseY = H * 0.5;
+  const startX = W * 0.5 - atoms.length * 6;
+
+  for (let i = 0; i < atoms.length; i++) {
+    drawAtom(
+      startX + i * 8,   // плотность по X
+      baseY,
+      atoms[i].hold,
+      atoms[i].market,
+      i
+    );
+  }
+
   requestAnimationFrame(render);
 }
 render();
