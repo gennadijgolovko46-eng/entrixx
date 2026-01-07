@@ -25,6 +25,9 @@ const FADE_OPACITY = 0.25;
 const SMOOTH = 0.15;
 const BEHAVIOR_SCALE = 0.5;
 
+/* atom visual */
+const TAIL_SCALE = 2;
+
 /* ===============================
    RESIZE
    =============================== */
@@ -170,13 +173,13 @@ function drawAtom(x, y, hold, market, alpha = 1) {
   ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x - 2, y);
-  ctx.lineTo(x - 2, y - hold);
+  ctx.lineTo(x - 2, y - hold * TAIL_SCALE);
   ctx.stroke();
 
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + 2, y);
-  ctx.lineTo(x + 2, y - market);
+  ctx.lineTo(x + 2, y - market * TAIL_SCALE);
   ctx.stroke();
 
   ctx.globalAlpha = 1;
