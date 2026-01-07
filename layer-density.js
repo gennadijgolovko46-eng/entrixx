@@ -2,40 +2,52 @@
    ENTRIXX — DENSITY LAYER
    =============================== */
 
-const DENSITY_MAX_GAP = 15 * 60 * 1000; // 15 minutes
-const DENSITY_BASE_WIDTH = 1;
-const DENSITY_MAX_WIDTH = 4;
+/*
+Rules:
+- Density is background-only
+- No global canvas state pollution
+- Drawn BEFORE behavior and atoms
+- No numbers, no thresholds
+- Breaks on -2 implicitly by gaps
+*/
 
-function drawDensity(ctx, atoms) {
-  if (!atoms || atoms.length < 2) return;
+export function drawDensity(ctx, atoms) {
+  if (!ctx || !atoms || atoms.length < 2) return;
 
   ctx.save();
-  ctx.strokeStyle = "rgba(120,120,120,0.6)";
+
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = "rgba(0,0,0,0.12)";
   ctx.lineCap = "round";
 
-  for (let i = 1; i < atoms.length; i++) {
-    const a = atoms[i - 1];
-    const b = atoms[i];
+  ctx.beginPath();
 
-    if (a.break === true || b.break === true) continue;
+  let prev = null;
 
-    const dt = Math.abs(b.time - a.time);
-    if (dt > DENSITY_MAX_GAP) continue;
+  for (let i = 0; i < atoms.length; i++) {
+    const a = atoms[i];
 
-    const t = Math.max(0, 1 - dt / DENSITY_MAX_GAP);
-    const width =
-      DENSITY_BASE_WIDTH +
-      t * (DENSITY_MAX_WIDTH - DENSITY_BASE_WIDTH);
+    // Skip invalid atoms
+    if (!a || typeof a.x !== "number" || typeof a.y !== "number") {
+      prev = null;
+      continue;
+    }
 
-    ctx.lineWidth = width;
+    // Break series on hard stop (-2)
+    if (a.stop === true) {
+      prev = null;
+      continue;
+    }
 
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+    if (!prev) {
+      ctx.moveTo(a.x, a.y);
+    } else {
+      ctx.lineTo(a.x, a.y);
+    }
+
+    prev = a;
   }
 
+  ctx.stroke();
   ctx.restore();
 }
-
-window.drawDensity = drawDensity;
