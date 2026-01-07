@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ENTRIXX MIRROR DEBUG</title>
+<title>ENTRIXX MIRROR STEP 3</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -12,32 +12,64 @@ html, body {
   width: 100%;
   height: 100%;
   background: #ffffff;
+  overflow: hidden;
 }
-#test {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  width: 120px;
-  height: 120px;
-  background: red;
+canvas {
+  display: block;
 }
-#label {
+#back {
   position: fixed;
-  top: 150px;
-  left: 20px;
+  right: 18px;
+  bottom: 18px;
   font-family: system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
+  color: rgba(0,0,0,0.45);
 }
 </style>
 </head>
 
 <body>
 
-<div id="test"></div>
-<div id="label">INLINE HTML OK</div>
+<canvas id="canvas"></canvas>
+<div id="back">back</div>
 
 <script>
-console.log("INLINE SCRIPT RUNNING");
+/* ==== CANVAS INIT ==== */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ==== TEST DRAW ==== */
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // black body
+  ctx.fillStyle = "#000";
+  ctx.fillRect(200, 300, 6, 6);
+
+  // blue tail
+  ctx.strokeStyle = "rgba(40,90,255,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(203, 300);
+  ctx.lineTo(203, 240);
+  ctx.stroke();
+
+  // green tail
+  ctx.strokeStyle = "rgba(60,180,120,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(207, 300);
+  ctx.lineTo(207, 200);
+  ctx.stroke();
+
+  requestAnimationFrame(draw);
+}
+draw();
 </script>
 
 </body>
