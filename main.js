@@ -1,5 +1,5 @@
 /* ===============================
-   ENTRIXX — MAIN (SAFE RESET)
+   ENTRIXX — MAIN (DIAGNOSTIC SAFE)
    =============================== */
 
 (function () {
@@ -13,10 +13,16 @@
   }
 
   const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    console.error("Context not found");
+    return;
+  }
 
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   window.addEventListener("resize", resize);
@@ -27,23 +33,29 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  // ---- SAFE DRAW LOOP ----
+  // ---- DRAW LOOP ----
   function draw() {
     clear();
 
-    // атомы (если есть)
+    // === DIAGNOSTIC MARK ===
+    ctx.fillStyle = "red";
+    ctx.fillRect(50, 50, 120, 120);
+
+    // optional layers (safe)
+    if (typeof window.drawDensityLayer === "function") {
+      try { window.drawDensityLayer(ctx); } catch (e) {}
+    }
+
     if (typeof window.drawAtoms === "function") {
-      try { window.drawAtoms(ctx); } catch (e) { console.error(e); }
+      try { window.drawAtoms(ctx); } catch (e) {}
     }
 
-    // рынок (если есть)
     if (typeof window.drawMarket === "function") {
-      try { window.drawMarket(ctx); } catch (e) { console.error(e); }
+      try { window.drawMarket(ctx); } catch (e) {}
     }
 
-    // линия поведения (если есть)
     if (typeof window.drawBehavior === "function") {
-      try { window.drawBehavior(ctx); } catch (e) { console.error(e); }
+      try { window.drawBehavior(ctx); } catch (e) {}
     }
 
     requestAnimationFrame(draw);
