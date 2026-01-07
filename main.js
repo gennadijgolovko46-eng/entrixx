@@ -1,8 +1,9 @@
 import { createTimeMapper } from "./time.js";
 import { computeMarket } from "./market.js";
+import { computeHold } from "./hold.js";
 
 /* ===============================
-   CANVAS SETUP
+   CANVAS
    =============================== */
 
 const canvas = document.getElementById("scene");
@@ -15,8 +16,6 @@ let mapper = null;
 /* ===============================
    PARAMETERS
    =============================== */
-
-const MARKET_WINDOW_HOURS = 8;
 
 const LIMIT_WINDOW = 3;
 const LIMIT_THRESHOLD = 600;
@@ -59,28 +58,63 @@ function variance(arr) {
    DATA (PROBE)
    =============================== */
 
-/* trades: EXIT-BASED */
 let trades = [
-  { time: "2026-01-06T09:10:00Z", side: "long",  exit_price: 100 },
-  { time: "2026-01-06T09:18:00Z", side: "long",  exit_price: 102 },
-  { time: "2026-01-06T09:40:00Z", side: "short", exit_price: 105 },
-  { time: "2026-01-06T12:00:00Z", side: "long",  exit_price: 110 },
-  { time: "2026-01-06T12:01:30Z", side: "long",  exit_price: 112 },
-  { time: "2026-01-06T12:02:10Z", side: "short", exit_price: 111 },
-  { time: "2026-01-06T16:20:00Z", side: "long",  exit_price: 115 }
+  {
+    time: "2026-01-06T09:10:00Z",
+    side: "long",
+    entry_price: 95,
+    exit_price: 100
+  },
+  {
+    time: "2026-01-06T09:18:00Z",
+    side: "long",
+    entry_price: 98,
+    exit_price: 102
+  },
+  {
+    time: "2026-01-06T09:40:00Z",
+    side: "short",
+    entry_price: 108,
+    exit_price: 105
+  },
+  {
+    time: "2026-01-06T12:00:00Z",
+    side: "long",
+    entry_price: 105,
+    exit_price: 110
+  },
+  {
+    time: "2026-01-06T12:01:30Z",
+    side: "long",
+    entry_price: 108,
+    exit_price: 112
+  },
+  {
+    time: "2026-01-06T12:02:10Z",
+    side: "short",
+    entry_price: 114,
+    exit_price: 111
+  },
+  {
+    time: "2026-01-06T16:20:00Z",
+    side: "long",
+    entry_price: 110,
+    exit_price: 115
+  }
 ].map(t => ({
   ...t,
   ts: Date.parse(t.time)
 }));
 
 /* minute OHLC mock */
+
 let ohlc = [];
 let t0 = Date.parse("2026-01-06T09:00:00Z");
-let price = 100;
+let price = 95;
 
 for (let i = 0; i < 600; i++) {
-  let high = price + Math.random() * 5;
-  let low  = price - Math.random() * 5;
+  let high = price + Math.random() * 6;
+  let low = price - Math.random() * 6;
   let close = low + Math.random() * (high - low);
 
   ohlc.push({
@@ -95,9 +129,10 @@ for (let i = 0; i < 600; i++) {
 }
 
 /* ===============================
-   MARKET ATTACH
+   ATTACH HOLD + MARKET
    =============================== */
 
+trades = computeHold(trades);
 trades = computeMarket(trades, ohlc);
 
 /* ===============================
@@ -163,7 +198,7 @@ function drawBehavior(trades, limitTime) {
   trades.forEach(t => {
     if (limitTime && t.ts > limitTime) return;
 
-    const delta = (t.hold || 0) - (t.market || 0);
+    const delta = t.hold - t.market;
     smooth = smooth * (1 - SMOOTH) + delta * SMOOTH;
     value += smooth;
 
@@ -197,7 +232,7 @@ function render() {
   const limitTime = detectLimit(times);
 
   const xStart = mapper.timeToX(mapper.dayStart);
-  const xEnd   = mapper.timeToX(mapper.dayEnd);
+  const xEnd = mapper.timeToX(mapper.dayEnd);
 
   if (limitTime) {
     const xLimit = mapper.timeToX(limitTime);
@@ -224,7 +259,7 @@ function render() {
     const alpha =
       limitTime && t.ts > limitTime ? FADE_OPACITY : 1;
 
-    drawAtom(x, y, t.hold || 0, t.market || 0, alpha);
+    drawAtom(x, y, t.hold, t.market, alpha);
   });
 
   requestAnimationFrame(render);
