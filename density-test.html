@@ -52,32 +52,31 @@ window.addEventListener("resize", resize);
 resize();
 
 /* ===============================
-   FAKE DENSITY DATA
+   DENSITY DATA
    =============================== */
 
-// имитация плотности решений
 const density = [
-  { x: 0.3, value: 1 },
+  { x: 0.30, value: 1 },
   { x: 0.35, value: 3 },
-  { x: 0.4, value: 6 },
+  { x: 0.40, value: 6 },
   { x: 0.45, value: 2 },
-  { x: 0.5, value: 8 }
+  { x: 0.50, value: 8 }
 ];
 
 /* ===============================
-   DRAW DENSITY
+   DRAW
    =============================== */
 
 function drawDensity() {
   const h = canvas.height;
   const w = canvas.width;
 
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 4;
+
   density.forEach(d => {
     const x = d.x * w;
     const height = d.value * 20;
-
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.lineWidth = 4;
 
     ctx.beginPath();
     ctx.moveTo(x, h * 0.7);
@@ -87,7 +86,7 @@ function drawDensity() {
 }
 
 /* ===============================
-   RENDER
+   RENDER LOOP
    =============================== */
 
 function render() {
