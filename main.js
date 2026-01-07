@@ -21,7 +21,6 @@ resize();
 const ATOM_SIZE = 6;
 
 const TAIL_WIDTH = 1.5;
-const TAIL_OFFSET_X = 5;
 
 const COLOR_HOLD   = "rgba(70,120,255,0.45)";
 const COLOR_MARKET = "rgba(80,170,130,0.45)";
@@ -45,25 +44,25 @@ function drawAtom(atom) {
   const baseY = atom.y * canvas.height;
 
   const squareTopY = baseY - ATOM_SIZE / 2;
-  const tailStartY = squareTopY + TAIL_WIDTH / 2;
+  const tailStartY = squareTopY;
 
-  // HOLD tail (left)
+  // HOLD tail (left edge)
   ctx.strokeStyle = COLOR_HOLD;
   ctx.lineWidth = TAIL_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(baseX - TAIL_OFFSET_X, tailStartY);
-  ctx.lineTo(baseX - TAIL_OFFSET_X, tailStartY - atom.hold);
+  ctx.moveTo(baseX - ATOM_SIZE / 2, tailStartY);
+  ctx.lineTo(baseX - ATOM_SIZE / 2, tailStartY - atom.hold);
   ctx.stroke();
 
-  // MARKET tail (right)
+  // MARKET tail (right edge)
   ctx.strokeStyle = COLOR_MARKET;
   ctx.lineWidth = TAIL_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(baseX + TAIL_OFFSET_X, tailStartY);
-  ctx.lineTo(baseX + TAIL_OFFSET_X, tailStartY - atom.market);
+  ctx.moveTo(baseX + ATOM_SIZE / 2, tailStartY);
+  ctx.lineTo(baseX + ATOM_SIZE / 2, tailStartY - atom.market);
   ctx.stroke();
 
-  // ATOM body
+  // ATOM body (drawn last, overlaps tails)
   ctx.fillStyle = ATOM_COLOR;
   ctx.fillRect(
     baseX - ATOM_SIZE / 2,
