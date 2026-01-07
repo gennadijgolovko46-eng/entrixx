@@ -1,85 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>ENTRIXX — Recovery</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: #fff;
-  overflow: hidden;
-}
-canvas {
-  display: block;
-}
-</style>
+  <meta charset="UTF-8" />
+  <title>ENTRIXX</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: block;
+    }
+
+    #back {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      font-size: 12px;
+      color: rgba(0,0,0,0.4);
+      cursor: pointer;
+      user-select: none;
+    }
+  </style>
 </head>
+
 <body>
+  <div id="wrap">
+    <canvas id="layer1"></canvas>
+    <canvas id="layer2"></canvas>
+    <canvas id="layer3"></canvas>
+  </div>
 
-<canvas id="c"></canvas>
+  <div id="back">back</div>
 
-<script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
+  <!-- CORE -->
+  <script src="core.js"></script>
 
-function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * dpr;
-  canvas.height = window.innerHeight * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-window.addEventListener("resize", resize);
-resize();
+  <!-- LAYERS -->
+  <script src="layer-atoms.js"></script>
+  <script src="layer-behavior.js"></script>
 
-// TEST ATOMS — GUARANTEED VISIBLE
-const ATOM = 6;
-const SCALE = 2;
-const MIN = ATOM;
-
-const atoms = [
-  { x: 0.3, y: 0.5, hold: 2, market: 10 },
-  { x: 0.35, y: 0.52, hold: 1, market: 8 },
-  { x: 0.6, y: 0.5, hold: 3, market: 14 }
-];
-
-function tail(v) {
-  if (v === 0) return 0;
-  const t = Math.abs(v * SCALE);
-  return Math.max(t, MIN) * Math.sign(v);
-}
-
-function drawAtom(a) {
-  const x = a.x * canvas.width;
-  const y = a.y * canvas.height;
-
-  ctx.strokeStyle = "#2F6BFF";
-  ctx.beginPath();
-  ctx.moveTo(x - 2, y);
-  ctx.lineTo(x - 2, y - tail(a.hold));
-  ctx.stroke();
-
-  ctx.strokeStyle = "#2DBE60";
-  ctx.beginPath();
-  ctx.moveTo(x + 2, y);
-  ctx.lineTo(x + 2, y - tail(a.market));
-  ctx.stroke();
-
-  ctx.fillStyle = "#000";
-  ctx.fillRect(x - ATOM/2, y - ATOM/2, ATOM, ATOM);
-}
-
-function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  atoms.forEach(drawAtom);
-  requestAnimationFrame(render);
-}
-
-render();
-</script>
-
+  <!-- DENSITY (SAFE PLACEHOLDER) -->
+  <script src="layer-density.js"></script>
 </body>
 </html>
