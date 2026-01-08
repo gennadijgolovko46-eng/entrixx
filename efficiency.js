@@ -1,7 +1,14 @@
-// efficiency.js — Efficiency Layer V1 (locked)
+// efficiency.js — Efficiency Layer V1 (stable, deterministic)
 
-const WINDOW_SIZE = 6;
-const THRESHOLD = 3.5e10;
+/*
+Input:
+- exits: array of exit_time (ms), sorted asc
+Output:
+- { limitTime: ms | null }
+*/
+
+const WINDOW_SIZE = 6;      // fixed
+const RATIO_LIMIT = 6;     // fixed, deterministic
 const MIN_EXITS = WINDOW_SIZE + 1;
 
 export function computeEfficiency(exits) {
@@ -9,23 +16,26 @@ export function computeEfficiency(exits) {
     return { limitTime: null };
   }
 
+  // Δt series
   const deltas = [];
   for (let i = 1; i < exits.length; i++) {
     deltas.push(exits[i] - exits[i - 1]);
   }
 
+  // sliding window
   for (let i = WINDOW_SIZE - 1; i < deltas.length; i++) {
     const window = deltas.slice(i - WINDOW_SIZE + 1, i + 1);
-    const mean = window.reduce((s, v) => s + v, 0) / WINDOW_SIZE;
 
-    let variance = 0;
+    let min = Infinity;
+    let max = 0;
     for (let j = 0; j < window.length; j++) {
-      const d = window[j] - mean;
-      variance += d * d;
+      const v = window[j];
+      if (v < min) min = v;
+      if (v > max) max = v;
     }
-    variance /= WINDOW_SIZE;
 
-    if (variance > THRESHOLD) {
+    if (min > 0 && max / min >= RATIO_LIMIT) {
+      // one-time limit
       return { limitTime: exits[i + 1] };
     }
   }
@@ -44,36 +54,30 @@ export function drawEfficiencyLayer(ctx, opts) {
   } = opts;
 
   const y = height - barHeight;
-
-  function timeToX(t) {
-    const span = dayEnd - dayStart;
-    if (span <= 0) return 0;
-    return ((t - dayStart) / span) * width;
-  }
+  const span = dayEnd - dayStart;
+  const timeToX = t => span > 0 ? ((t - dayStart) / span) * width : 0;
 
   ctx.save();
 
-  if (!limitTime) {
-    ctx.fillStyle = "#2DBE60";
-    ctx.fillRect(0, y, width, barHeight);
-    ctx.restore();
-    return;
-  }
-
-  const xLimit = timeToX(limitTime);
-
+  // green base
   ctx.fillStyle = "#2DBE60";
-  ctx.fillRect(0, y, xLimit, barHeight);
+  ctx.fillRect(0, y, width, barHeight);
 
-  ctx.strokeStyle = "#E53935";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(xLimit + 0.5, y);
-  ctx.lineTo(xLimit + 0.5, y + barHeight);
-  ctx.stroke();
+  if (limitTime) {
+    const x = timeToX(limitTime);
 
-  ctx.fillStyle = "#B0B0B0";
-  ctx.fillRect(xLimit, y, width - xLimit, barHeight);
+    // red vertical
+    ctx.strokeStyle = "#E53935";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, y);
+    ctx.lineTo(x + 0.5, y + barHeight);
+    ctx.stroke();
+
+    // gray after
+    ctx.fillStyle = "#B0B0B0";
+    ctx.fillRect(x, y, width - x, barHeight);
+  }
 
   ctx.restore();
 }
