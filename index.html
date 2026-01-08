@@ -53,7 +53,9 @@ canvas { display: block; }
 
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
+import { computeBehavior, drawBehaviorLine } from "./behavior.js";
 
+/* ===== base ===== */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -83,7 +85,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* pointer time */
+/* ===== pointer time ===== */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
@@ -117,21 +119,22 @@ const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-/* demo trades (replace with exchange data later) */
-const trades = [
-  { entry_time: t(9,10), exit_time: t(9,42), liquidation: false, dir: 1 },
-  { entry_time: t(10,5), exit_time: t(10,7), liquidation: true, dir: -1 },
-  { entry_time: t(11,15), exit_time: t(11,45), liquidation: false, dir: 1 },
-  { entry_time: t(11,50), exit_time: t(12,30), liquidation: false, dir: -1 },
-  { entry_time: t(12,35), exit_time: t(12,36), liquidation: false, dir: 1 }
-];
-
+/* ===== demo trades (replace later) ===== */
 function t(h,m){
   const d = new Date();
   d.setHours(h,m,0,0);
   return d.getTime();
 }
 
+const trades = [
+  { entry_time: t(9,10),  exit_time: t(9,42),  liquidation: false, dir: 1 },
+  { entry_time: t(10,5),  exit_time: t(10,7),  liquidation: true,  dir: -1 },
+  { entry_time: t(11,15), exit_time: t(11,45), liquidation: false, dir: 1 },
+  { entry_time: t(11,50), exit_time: t(12,30), liquidation: false, dir: -1 },
+  { entry_time: t(12,35), exit_time: t(12,36), liquidation: false, dir: 1 }
+];
+
+/* ===== day mapping ===== */
 const dayStart = new Date();
 dayStart.setHours(0,0,0,0);
 const DAY_START_MS = dayStart.getTime();
@@ -142,7 +145,7 @@ function timeToX(t) {
   return ((t - DAY_START_MS) / span) * W;
 }
 
-/* efficiency */
+/* ===== efficiency ===== */
 const exitTimes = trades
   .filter(t => t.exit_time)
   .map(t => t.exit_time)
@@ -150,7 +153,25 @@ const exitTimes = trades
 
 const efficiency = computeEfficiency(exitTimes);
 
-/* drawing */
+/* ===== behavior data ===== */
+const behaviorTrades = trades.map(t => ({
+  entry_time: t.entry_time,
+  exit_time: t.exit_time,
+  hold_price: t.liquidation
+    ? 0
+    : Math.min(
+        Math.round((t.exit_time - t.entry_time) / 60000),
+        480
+      ),
+  market_price: 480
+}));
+
+const behaviorPoints = computeBehavior(
+  behaviorTrades,
+  efficiency.limitTime
+);
+
+/* ===== drawing ===== */
 function drawLiquidation(x,y){
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
@@ -171,7 +192,10 @@ function drawAtom(x,y,t){
   ctx.strokeStyle = COLOR_GREEN;
   ctx.beginPath();
   ctx.moveTo(x+ATOM_SIZE/2, t.dir<0?bottom:top);
-  ctx.lineTo(x+ATOM_SIZE/2, t.dir<0?bottom+MARKET_HEIGHT:top-MARKET_HEIGHT);
+  ctx.lineTo(
+    x+ATOM_SIZE/2,
+    t.dir<0?bottom+MARKET_HEIGHT:top-MARKET_HEIGHT
+  );
   ctx.stroke();
 
   if(!t.liquidation){
@@ -185,12 +209,20 @@ function drawAtom(x,y,t){
     ctx.strokeStyle = COLOR_BLUE;
     ctx.beginPath();
     ctx.moveTo(x-ATOM_SIZE/2, t.dir<0?bottom:top);
-    ctx.lineTo(x-ATOM_SIZE/2, t.dir<0?bottom+hold:top-hold);
+    ctx.lineTo(
+      x-ATOM_SIZE/2,
+      t.dir<0?bottom+hold:top-hold
+    );
     ctx.stroke();
   }
 
   ctx.fillStyle = COLOR_BLACK;
-  ctx.fillRect(x-ATOM_SIZE/2,y-ATOM_SIZE/2,ATOM_SIZE,ATOM_SIZE);
+  ctx.fillRect(
+    x-ATOM_SIZE/2,
+    y-ATOM_SIZE/2,
+    ATOM_SIZE,
+    ATOM_SIZE
+  );
 
   if(t.liquidation) drawLiquidation(x,y);
 }
@@ -210,21 +242,30 @@ function render(){
   ctx.clearRect(0,0,W,H);
 
   drawEfficiencyLayer(ctx,{
-    dayStart:DAY_START_MS,
-    dayEnd:Date.now(),
-    limitTime:efficiency.limitTime,
-    width:W,
-    height:H
+    dayStart: DAY_START_MS,
+    dayEnd: Date.now(),
+    limitTime: efficiency.limitTime,
+    width: W,
+    height: H
   });
 
-  const baseY = H*0.55;
+  const baseY = H * 0.55;
+
+  drawBehaviorLine(
+    ctx,
+    behaviorPoints,
+    timeToX,
+    baseY
+  );
 
   for(const tr of trades){
     ctx.globalAlpha =
-      efficiency.limitTime && tr.exit_time && tr.exit_time > efficiency.limitTime
+      efficiency.limitTime &&
+      tr.exit_time &&
+      tr.exit_time > efficiency.limitTime
         ? 0.25
         : 1;
-    drawAtom(timeToX(tr.entry_time),baseY,tr);
+    drawAtom(timeToX(tr.entry_time), baseY, tr);
   }
   ctx.globalAlpha = 1;
 
