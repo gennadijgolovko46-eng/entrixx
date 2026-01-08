@@ -1,92 +1,57 @@
-/* ===============================
-   ENTRIXX — ATOM (CANONICAL V1)
-   =============================== */
+// atom.js
 
-/*
-Input:
-x, y            — screen coordinates (entry point)
-entryTime       — timestamp (ms)
-exitTime        — timestamp (ms) | null if liquidated
-isLiquidation   — boolean
-*/
+export const MARKET_DURATION_SEC = 8 * 60 * 60; // 8 hours
 
-const ATOM_SIZE = 3;
-const TAIL_WIDTH = 1;
+export function drawAtom(ctx, trade, x, baseY, pxPerSec) {
+  const ATOM_SIZE = 4;
+  const TAIL_W = 1.2;
 
-// time constants
-const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
+  const BLUE = "#2F6BFF";
+  const GREEN = "#2DBE60";
+  const BLACK = "#000";
+  const RED = "#C00000";
 
-// visual scale
-const PX_PER_MIN = 1; // fixed scale, calibrated once per UI
+  const top = baseY - ATOM_SIZE / 2;
+  const bottom = baseY + ATOM_SIZE / 2;
 
-// colors
-const COLOR_ATOM = "#000";
-const COLOR_HOLD = "#2F6BFF";
-const COLOR_MARKET = "#2DBE60";
-const COLOR_LIQUIDATION = "#000";
-
-export function drawAtom(ctx, x, y, trade) {
-  const {
-    entryTime,
-    exitTime,
-    isLiquidation
-  } = trade;
-
-  // ---- time lengths ----
-  const marketMinutes = MARKET_WINDOW_MS / 60000;
-  const marketLenPx = marketMinutes * PX_PER_MIN;
-
-  let holdLenPx = 0;
-
-  if (!isLiquidation && exitTime !== null) {
-    const holdMs = Math.max(0, exitTime - entryTime);
-    const holdMin = Math.min(holdMs / 60000, marketMinutes);
-    holdLenPx = holdMin * PX_PER_MIN;
-  }
-
-  ctx.lineWidth = TAIL_WIDTH;
-
-  // ---- GREEN: MARKET (always 8h) ----
-  ctx.strokeStyle = COLOR_MARKET;
+  // ---------- MARKET (always 8h) ----------
+  const marketLen = MARKET_DURATION_SEC * pxPerSec;
+  ctx.strokeStyle = GREEN;
+  ctx.lineWidth = TAIL_W;
   ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE, y);
-  ctx.lineTo(x + ATOM_SIZE, y - marketLenPx);
+  ctx.moveTo(x + ATOM_SIZE / 2, top);
+  ctx.lineTo(x + ATOM_SIZE / 2, top - marketLen);
   ctx.stroke();
 
-  // ---- BLUE: HOLD (real time only) ----
-  if (!isLiquidation && holdLenPx > 0) {
-    ctx.strokeStyle = COLOR_HOLD;
+  // ---------- USER (blue) ----------
+  if (!trade.liquidation) {
+    const holdSec = Math.max(trade.exit_time - trade.entry_time, 1);
+    const holdLen = Math.min(holdSec * pxPerSec, marketLen);
+
+    ctx.strokeStyle = BLUE;
     ctx.beginPath();
-    ctx.moveTo(x - ATOM_SIZE, y);
-    ctx.lineTo(x - ATOM_SIZE, y - holdLenPx);
+    ctx.moveTo(x - ATOM_SIZE / 2, top);
+    ctx.lineTo(x - ATOM_SIZE / 2, top - holdLen);
     ctx.stroke();
   }
 
-  // ---- ENTRY POINT ----
-  if (isLiquidation) {
-    drawLiquidationCross(ctx, x, y);
-    return;
+  // ---------- ENTRY ----------
+  if (trade.liquidation) {
+    ctx.strokeStyle = RED;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(x - 5, baseY - 5);
+    ctx.lineTo(x + 5, baseY + 5);
+    ctx.moveTo(x + 5, baseY - 5);
+    ctx.lineTo(x - 5, baseY + 5);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = BLACK;
+    ctx.fillRect(
+      x - ATOM_SIZE / 2,
+      baseY - ATOM_SIZE / 2,
+      ATOM_SIZE,
+      ATOM_SIZE
+    );
   }
-
-  ctx.fillStyle = COLOR_ATOM;
-  ctx.fillRect(
-    Math.round(x - ATOM_SIZE / 2),
-    Math.round(y - ATOM_SIZE / 2),
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
-}
-
-// ---- liquidation mark ----
-function drawLiquidationCross(ctx, x, y) {
-  const r = 4;
-  ctx.strokeStyle = COLOR_LIQUIDATION;
-  ctx.lineWidth = 1.2;
-
-  ctx.beginPath();
-  ctx.moveTo(x - r, y - r);
-  ctx.lineTo(x + r, y + r);
-  ctx.moveTo(x + r, y - r);
-  ctx.lineTo(x - r, y + r);
-  ctx.stroke();
 }
