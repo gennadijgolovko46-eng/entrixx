@@ -1,18 +1,6 @@
-// behavior.js — Behavior Line V1 (locked)
+// behavior.js — Behavior Line V1 (fixed)
 
-/*
-Inputs (strict):
-- trades: array of trades sorted by exit_time
-  {
-    entry_time: ms,
-    exit_time: ms | null,
-    hold_price: number,     // HOLD in price units
-    market_price: number    // MARKET in price units (8h window)
-  }
-- limitTime: ms | null
-*/
-
-const CLAMP = 1; // fixed global constant (price units)
+const CLAMP = 1;
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -50,7 +38,7 @@ export function drawBehaviorLine(ctx, points, timeToX, baseY) {
 
   for (let i = 0; i < points.length; i++) {
     const x = timeToX(points[i].time);
-    const y = baseY - points[i].value;
+    const y = baseY - points[i].value; // БЕЗ SCALE — ЖИВАЯ ЛИНИЯ
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
