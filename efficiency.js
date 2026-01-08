@@ -1,51 +1,32 @@
-// efficiency.js — Efficiency Layer V1 (CV based, locked)
+// efficiency.js — Efficiency Layer V1 (fixed, strict)
 
-// Product constants (fixed for V1)
-const WINDOW_SIZE = 6;        // N
-const THRESHOLD = 0.6;        // CV threshold
+const WINDOW_SIZE = 6;
+const THRESHOLD = 3.5e10;
 const MIN_EXITS = WINDOW_SIZE + 1;
 
-export function computeEfficiency(exitTimes) {
-  if (!exitTimes || exitTimes.length < MIN_EXITS) {
+export function computeEfficiency(exits) {
+  if (!exits || exits.length < MIN_EXITS) {
     return { limitTime: null };
   }
 
-  // Compute deltas Δt[i] = t[i] - t[i-1]
   const deltas = [];
-  for (let i = 1; i < exitTimes.length; i++) {
-    deltas.push(exitTimes[i] - exitTimes[i - 1]);
+  for (let i = 1; i < exits.length; i++) {
+    deltas.push(exits[i] - exits[i - 1]);
   }
 
-  // Slide window over deltas
   for (let i = WINDOW_SIZE - 1; i < deltas.length; i++) {
-    // W[i] = last N deltas
     const window = deltas.slice(i - WINDOW_SIZE + 1, i + 1);
+    const mean = window.reduce((s, v) => s + v, 0) / WINDOW_SIZE;
 
-    // mu = mean(W)
-    let sum = 0;
-    for (let k = 0; k < window.length; k++) sum += window[k];
-    const mu = sum / WINDOW_SIZE;
-
-    // Guard: invalid mean
-    if (mu <= 0) continue;
-
-    // sigma = std(W)
     let variance = 0;
-    for (let k = 0; k < window.length; k++) {
-      const d = window[k] - mu;
+    for (let j = 0; j < window.length; j++) {
+      const d = window[j] - mean;
       variance += d * d;
     }
     variance /= WINDOW_SIZE;
-    const sigma = Math.sqrt(variance);
 
-    // CV = sigma / mu
-    const CV = sigma / mu;
-
-    // First exceed only (one-time trigger)
-    if (CV > THRESHOLD) {
-      // limitTime fixed at corresponding exit_time
-      // deltas[i] corresponds to exitTimes[i + 1]
-      return { limitTime: exitTimes[i + 1] };
+    if (variance > THRESHOLD) {
+      return { limitTime: exits[i + 1] };
     }
   }
 
@@ -72,21 +53,20 @@ export function drawEfficiencyLayer(ctx, opts) {
 
   ctx.save();
 
-  // No limit: full green bar
-  if (!limitTime) {
+  // GREEN ONLY (no limit)
+  if (limitTime === null) {
     ctx.fillStyle = "#2DBE60";
     ctx.fillRect(0, y, width, barHeight);
     ctx.restore();
     return;
   }
 
+  // LIMIT EXISTS -> GREEN + RED + GRAY
   const xLimit = timeToX(limitTime);
 
-  // Green before limit
   ctx.fillStyle = "#2DBE60";
   ctx.fillRect(0, y, xLimit, barHeight);
 
-  // Red vertical marker (limit)
   ctx.strokeStyle = "#E53935";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -94,7 +74,6 @@ export function drawEfficiencyLayer(ctx, opts) {
   ctx.lineTo(xLimit + 0.5, y + barHeight);
   ctx.stroke();
 
-  // Grey after limit
   ctx.fillStyle = "#B0B0B0";
   ctx.fillRect(xLimit, y, width - xLimit, barHeight);
 
