@@ -24,6 +24,14 @@ canvas { display: block; touch-action: none; }
   pointer-events: none;
 }
 
+#back {
+  position: fixed;
+  bottom: 14px;
+  left: 8px;
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.45);
+}
+
 #time {
   position: fixed;
   top: 8px;
@@ -39,21 +47,19 @@ canvas { display: block; touch-action: none; }
 <body>
 
 <canvas id="c"></canvas>
+<div id="back">Back</div>
 <div id="time"></div>
 <div id="date"></div>
 
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 
+/* canvas */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-/* ====== CONSTANTS (UTC ONLY) ====== */
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/* ====== CANVAS ====== */
 let W = 0, H = 0;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -68,123 +74,160 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* ====== UTC DAY STATE ====== */
-let currentDay = new Date(Date.UTC(
-  new Date().getUTCFullYear(),
-  new Date().getUTCMonth(),
-  new Date().getUTCDate()
-));
+/* utc day model */
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-function formatUTCDate(d) {
-  return d.toUTCString().slice(0, 16);
+const todayUTC = (() => {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+})();
+
+let currentDayUTC = todayUTC;
+const MIN_DAY_UTC = 0;
+
+function updateDateLabel() {
+  const d = new Date(currentDayUTC);
+  dateEl.textContent = d.toUTCString().slice(0, 16);
 }
+updateDateLabel();
 
-/* ====== TIME MAPPING ====== */
-function timeToX(t, dayStart) {
-  return ((t - dayStart) / DAY_MS) * W;
-}
+/* pointer time line */
+let touchX = null;
 
-function xToUTCTime(x) {
-  const totalMinutes = Math.floor((x / W) * 1440);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
-}
-
-/* ====== DATA (UTC DAYS) ====== */
-const tradeDB = {
-  "2026-01-09": [
-    [9,0,9,10,1],
-    [9,10,9,20,1],
-    [9,20,9,30,1],
-    [9,30,9,40,1],
-    [9,40,9,50,1],
-    [9,50,9,51,-1],
-    [9,51,10,30,1]
-  ],
-  "2026-01-20": [
-    [11,0,11,5,1],
-    [11,5,11,6,-1],
-    [11,6,12,0,1]
-  ]
-};
-
-function buildTrades(dayUTC) {
-  const key = dayUTC.toISOString().slice(0,10);
-  const rows = tradeDB[key];
-  if (!rows) return [];
-
-  return rows.map(r => {
-    const e = new Date(dayUTC);
-    const x = new Date(dayUTC);
-    e.setUTCHours(r[0], r[1], 0, 0);
-    x.setUTCHours(r[2], r[3], 0, 0);
-    return {
-      entry_time: e.getTime(),
-      exit_time: x.getTime(),
-      dir: r[4]
-    };
-  });
-}
-
-/* ====== SWIPE (DAY PAGING) ====== */
-let startX = null;
-canvas.addEventListener("pointerdown", e => startX = e.clientX);
-canvas.addEventListener("pointerup", e => {
-  if (startX === null) return;
-  const dx = e.clientX - startX;
-  if (Math.abs(dx) > 60) {
-    currentDay = new Date(currentDay.getTime() + (dx < 0 ? DAY_MS : -DAY_MS));
-  }
-  startX = null;
+canvas.addEventListener("pointerdown", e => {
+  touchX = e.clientX;
 });
 
-/* ====== TIME CURSOR ====== */
-let cursorX = null;
 canvas.addEventListener("pointermove", e => {
-  cursorX = e.clientX;
-  timeEl.textContent = xToUTCTime(cursorX);
-  timeEl.style.opacity = 1;
+  if (touchX !== null) touchX = e.clientX;
 });
-canvas.addEventListener("pointerleave", () => {
-  cursorX = null;
+
+canvas.addEventListener("pointerup", () => {
+  touchX = null;
   timeEl.style.opacity = 0;
 });
 
-/* ====== DRAW ATOM ====== */
-function drawAtom(x,y,tr){
-  ctx.lineWidth = 1.2;
+canvas.addEventListener("pointerleave", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
 
-  ctx.strokeStyle = "#2DBE60";
+function xToTimeUTC(x) {
+  const minutes = Math.round((x / W) * 1440);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+}
+
+/* day paging */
+let startX = null;
+
+canvas.addEventListener("pointerdown", e => {
+  startX = e.clientX;
+});
+
+canvas.addEventListener("pointerup", e => {
+  if (startX === null) return;
+  const dx = e.clientX - startX;
+  startX = null;
+
+  if (Math.abs(dx) < 40) return;
+
+  if (dx < 0) {
+    const next = currentDayUTC - DAY_MS;
+    if (next >= MIN_DAY_UTC) {
+      currentDayUTC = next;
+      updateDateLabel();
+    }
+  } else {
+    const next = currentDayUTC + DAY_MS;
+    if (next <= todayUTC) {
+      currentDayUTC = next;
+      updateDateLabel();
+    }
+  }
+});
+
+/* atom constants */
+const ATOM_SIZE = 2;
+const TAIL_WIDTH = 1.2;
+const MIN_BLUE = 2;
+const MARKET_HEIGHT = 160;
+
+const COLOR_BLUE = "#2F6BFF";
+const COLOR_GREEN = "#2DBE60";
+const COLOR_BLACK = "#000";
+
+/* demo trades for current day */
+function tUTC(h, m) {
+  return currentDayUTC + (h * 60 + m) * 60000;
+}
+
+const trades = [
+  { entry_time: tUTC(9,0),  exit_time: tUTC(9,10), dir: 1 },
+  { entry_time: tUTC(9,10), exit_time: tUTC(9,20), dir: 1 },
+  { entry_time: tUTC(9,20), exit_time: tUTC(9,30), dir: 1 },
+  { entry_time: tUTC(9,30), exit_time: tUTC(9,40), dir: 1 },
+  { entry_time: tUTC(9,40), exit_time: tUTC(9,50), dir: 1 },
+  { entry_time: tUTC(9,50), exit_time: tUTC(9,51), dir: -1 },
+  { entry_time: tUTC(9,51), exit_time: tUTC(10,30), dir: 1 },
+  { entry_time: tUTC(10,30), exit_time: tUTC(10,31), dir: -1 }
+];
+
+/* efficiency */
+const exitTimes = trades.map(t => t.exit_time).sort((a,b)=>a-b);
+const efficiency = computeEfficiency(exitTimes);
+
+/* drawing */
+function timeToX(t) {
+  return ((t - currentDayUTC) / DAY_MS) * W;
+}
+
+function drawAtom(x, y, t) {
+  const top = y - ATOM_SIZE/2;
+  const bottom = y + ATOM_SIZE/2;
+
+  ctx.lineWidth = TAIL_WIDTH;
+
+  ctx.strokeStyle = COLOR_GREEN;
   ctx.beginPath();
-  ctx.moveTo(x+1, y);
-  ctx.lineTo(x+1, y - 160 * tr.dir);
+  ctx.moveTo(x+1, t.dir < 0 ? bottom : top);
+  ctx.lineTo(x+1, t.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT);
   ctx.stroke();
 
-  ctx.strokeStyle = "#2F6BFF";
+  const hold = Math.max(
+    MIN_BLUE,
+    Math.round((t.exit_time - t.entry_time) / 60000)
+  );
+
+  ctx.strokeStyle = COLOR_BLUE;
   ctx.beginPath();
-  ctx.moveTo(x-1, y);
-  ctx.lineTo(x-1, y - 20 * tr.dir);
+  ctx.moveTo(x-1, t.dir < 0 ? bottom : top);
+  ctx.lineTo(x-1, t.dir < 0 ? bottom + hold : top - hold);
   ctx.stroke();
 
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = COLOR_BLACK;
   ctx.fillRect(x-1, y-1, 2, 2);
 }
 
-/* ====== RENDER ====== */
-function render(){
+function drawTimeLine() {
+  if (touchX === null) return;
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.moveTo(touchX, 0);
+  ctx.lineTo(touchX, H);
+  ctx.stroke();
+  timeEl.textContent = xToTimeUTC(touchX);
+  timeEl.style.opacity = 1;
+}
+
+/* render */
+function render() {
   ctx.clearRect(0,0,W,H);
 
-  const dayStart = currentDay.getTime();
-  dateEl.textContent = formatUTCDate(currentDay);
-
-  const trades = buildTrades(currentDay);
-  const exitTimes = trades.map(t => t.exit_time);
-  const efficiency = computeEfficiency(exitTimes);
-
-  drawEfficiencyLayer(ctx,{
-    dayStart,
-    dayEnd: dayStart + DAY_MS,
+  drawEfficiencyLayer(ctx, {
+    dayStart: currentDayUTC,
+    dayEnd: currentDayUTC + DAY_MS,
     limitTime: efficiency.limitTime,
     width: W,
     height: H
@@ -192,18 +235,10 @@ function render(){
 
   const baseY = H * 0.55;
   for (const tr of trades) {
-    drawAtom(timeToX(tr.entry_time, dayStart), baseY, tr);
+    drawAtom(timeToX(tr.entry_time), baseY, tr);
   }
 
-  /* vertical time line */
-  if (cursorX !== null) {
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.beginPath();
-    ctx.moveTo(cursorX, 0);
-    ctx.lineTo(cursorX, H);
-    ctx.stroke();
-  }
-
+  drawTimeLine();
   requestAnimationFrame(render);
 }
 
