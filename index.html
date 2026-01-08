@@ -54,7 +54,6 @@ canvas { display: block; touch-action: none; }
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 
-/* canvas */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -69,9 +68,7 @@ dateEl.textContent = new Date().toLocaleDateString("en-US", {
 });
 
 /* resize */
-let W = 0;
-let H = 0;
-
+let W = 0, H = 0;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   W = window.innerWidth;
@@ -85,87 +82,6 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* time bounds */
-const ACCOUNT_START_MS = new Date("2022-01-01T00:00:00Z").getTime();
-const NOW_MS = Date.now();
-
-/* fixed window size: 1 day */
-const WINDOW_MS = 24 * 60 * 60 * 1000;
-
-let viewStart = NOW_MS - WINDOW_MS;
-let viewEnd   = NOW_MS;
-
-/* time mapping */
-function timeToX(t) {
-  return ((t - viewStart) / (viewEnd - viewStart)) * W;
-}
-
-function xToTime(x) {
-  const t = viewStart + (x / W) * (viewEnd - viewStart);
-  const d = new Date(t);
-  const h = String(d.getHours()).padStart(2,"0");
-  const m = String(d.getMinutes()).padStart(2,"0");
-  return h + ":" + m;
-}
-
-/* horizontal drag only */
-let dragActive = false;
-let dragStartX = 0;
-let dragViewStart = 0;
-
-canvas.addEventListener("pointerdown", e => {
-  dragActive = true;
-  dragStartX = e.clientX;
-  dragViewStart = viewStart;
-});
-
-canvas.addEventListener("pointermove", e => {
-  if (!dragActive) return;
-
-  const dx = e.clientX - dragStartX;
-  const dt = -(dx / W) * WINDOW_MS;
-
-  let nextStart = dragViewStart + dt;
-  let nextEnd = nextStart + WINDOW_MS;
-
-  if (nextStart < ACCOUNT_START_MS) {
-    nextStart = ACCOUNT_START_MS;
-    nextEnd = nextStart + WINDOW_MS;
-  }
-
-  if (nextEnd > NOW_MS) {
-    nextEnd = NOW_MS;
-    nextStart = nextEnd - WINDOW_MS;
-  }
-
-  viewStart = nextStart;
-  viewEnd = nextEnd;
-});
-
-canvas.addEventListener("pointerup", () => {
-  dragActive = false;
-});
-
-canvas.addEventListener("pointerleave", () => {
-  dragActive = false;
-});
-
-/* time indicator */
-let touchX = null;
-
-canvas.addEventListener("pointerdown", e => {
-  touchX = e.clientX;
-});
-
-canvas.addEventListener("pointermove", e => {
-  if (touchX !== null) touchX = e.clientX;
-});
-
-canvas.addEventListener("pointerup", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-
 /* helpers */
 function t(h,m){
   const d = new Date();
@@ -173,7 +89,7 @@ function t(h,m){
   return d.getTime();
 }
 
-/* demo trades */
+/* trades */
 const trades = [
   { entry_time: t(9, 0),  exit_time: t(9,10), dir: 1 },
   { entry_time: t(9,10), exit_time: t(9,20), dir: 1 },
@@ -189,48 +105,78 @@ const trades = [
 const exitTimes = trades.map(t => t.exit_time).filter(Boolean).sort((a,b)=>a-b);
 const efficiency = computeEfficiency(exitTimes);
 
-/* atom config */
+/* === TIME WINDOW (FIXED) === */
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+const ACCOUNT_START_MS = new Date("2022-01-01T00:00:00Z").getTime();
+
+const lastTradeTime = Math.max(...exitTimes);
+let viewEnd = lastTradeTime + WINDOW_MS * 0.1;
+let viewStart = viewEnd - WINDOW_MS;
+
+/* mapping */
+function timeToX(t) {
+  return ((t - viewStart) / (viewEnd - viewStart)) * W;
+}
+
+function xToTime(x) {
+  const t = viewStart + (x / W) * (viewEnd - viewStart);
+  const d = new Date(t);
+  return String(d.getHours()).padStart(2,"0") + ":" +
+         String(d.getMinutes()).padStart(2,"0");
+}
+
+/* drag */
+let dragging = false;
+let dragStartX = 0;
+let dragViewStart = 0;
+
+canvas.addEventListener("pointerdown", e => {
+  dragging = true;
+  dragStartX = e.clientX;
+  dragViewStart = viewStart;
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const dx = e.clientX - dragStartX;
+  const dt = -(dx / W) * WINDOW_MS;
+
+  let nextStart = dragViewStart + dt;
+  let nextEnd = nextStart + WINDOW_MS;
+
+  if (nextStart < ACCOUNT_START_MS) {
+    nextStart = ACCOUNT_START_MS;
+    nextEnd = nextStart + WINDOW_MS;
+  }
+
+  viewStart = nextStart;
+  viewEnd = nextEnd;
+});
+
+canvas.addEventListener("pointerup", () => dragging = false);
+canvas.addEventListener("pointerleave", () => dragging = false);
+
+/* atom drawing */
 const ATOM_SIZE = 2;
-const TAIL_WIDTH = 1.2;
-const MIN_BLUE = 2;
 const MARKET_HEIGHT = 160;
 
-/* draw atom */
 function drawAtom(x, y, tr) {
-  const top = y - ATOM_SIZE / 2;
-  const bottom = y + ATOM_SIZE / 2;
-
-  ctx.lineWidth = TAIL_WIDTH;
+  ctx.lineWidth = 1.2;
 
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, tr.dir < 0 ? bottom : top);
-  ctx.lineTo(
-    x + ATOM_SIZE / 2,
-    tr.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
-  );
+  ctx.moveTo(x+1, y);
+  ctx.lineTo(x+1, y - MARKET_HEIGHT * tr.dir);
   ctx.stroke();
 
-  const hold = Math.max(
-    MIN_BLUE,
-    Math.min(Math.round((tr.exit_time - tr.entry_time) / 60000), 480)
-  );
   ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
-  ctx.moveTo(x - ATOM_SIZE / 2, tr.dir < 0 ? bottom : top);
-  ctx.lineTo(
-    x - ATOM_SIZE / 2,
-    tr.dir < 0 ? bottom + hold : top - hold
-  );
+  ctx.moveTo(x-1, y);
+  ctx.lineTo(x-1, y - 20 * tr.dir);
   ctx.stroke();
 
   ctx.fillStyle = "#000";
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
+  ctx.fillRect(x-1, y-1, 2, 2);
 }
 
 /* render */
@@ -248,23 +194,12 @@ function render() {
   const baseY = H * 0.55;
 
   for (const tr of trades) {
+    if (tr.exit_time < viewStart || tr.entry_time > viewEnd) continue;
     ctx.globalAlpha =
-      efficiency.limitTime && tr.exit_time > efficiency.limitTime
-        ? 0.25
-        : 1;
+      efficiency.limitTime && tr.exit_time > efficiency.limitTime ? 0.25 : 1;
     drawAtom(timeToX(tr.entry_time), baseY, tr);
   }
   ctx.globalAlpha = 1;
-
-  if (touchX !== null) {
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.beginPath();
-    ctx.moveTo(touchX,0);
-    ctx.lineTo(touchX,H);
-    ctx.stroke();
-    timeEl.textContent = xToTime(touchX);
-    timeEl.style.opacity = 1;
-  }
 
   requestAnimationFrame(render);
 }
