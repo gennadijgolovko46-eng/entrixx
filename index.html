@@ -126,16 +126,22 @@ function t(h,m){
   return d.getTime();
 }
 
-/* trades to trigger efficiency break */
+/* trades
+   First 5 exits are uniform.
+   Next 5 exits break rhythm in one window (1/60/1/60/1).
+*/
 const trades = [
   { entry_time: t(9, 0),  exit_time: t(9,10), liquidation:false, dir:1 },
   { entry_time: t(9,10), exit_time: t(9,20), liquidation:false, dir:1 },
   { entry_time: t(9,20), exit_time: t(9,30), liquidation:false, dir:1 },
   { entry_time: t(9,30), exit_time: t(9,40), liquidation:false, dir:1 },
   { entry_time: t(9,40), exit_time: t(9,50), liquidation:false, dir:1 },
+
   { entry_time: t(9,50), exit_time: t(9,51), liquidation:false, dir:-1 },
-  { entry_time: t(9,51), exit_time: t(10,30), liquidation:false, dir:1 },
-  { entry_time: t(10,30),exit_time: t(10,31), liquidation:false, dir:-1 }
+  { entry_time: t(9,51), exit_time: t(10,51), liquidation:false, dir:1 },
+  { entry_time: t(10,51), exit_time: t(10,52), liquidation:false, dir:-1 },
+  { entry_time: t(10,52), exit_time: t(11,52), liquidation:false, dir:1 },
+  { entry_time: t(11,52), exit_time: t(11,53), liquidation:false, dir:-1 }
 ];
 
 /* day mapping */
@@ -151,7 +157,7 @@ function timeToX(t) {
 
 /* efficiency */
 const exitTimes = trades
-  .map(t => t.exit_time)
+  .map(tr => tr.exit_time)
   .filter(Boolean)
   .sort((a,b) => a - b);
 
@@ -175,12 +181,14 @@ function drawAtom(x,y,t){
 
   ctx.lineWidth = TAIL_WIDTH;
 
+  /* market tail */
   ctx.strokeStyle = COLOR_GREEN;
   ctx.beginPath();
   ctx.moveTo(x+ATOM_SIZE/2, t.dir<0?bottom:top);
   ctx.lineTo(x+ATOM_SIZE/2, t.dir<0?bottom+MARKET_HEIGHT:top-MARKET_HEIGHT);
   ctx.stroke();
 
+  /* hold tail */
   if(!t.liquidation){
     const hold = Math.max(
       MIN_BLUE,
@@ -196,6 +204,7 @@ function drawAtom(x,y,t){
     ctx.stroke();
   }
 
+  /* atom square */
   ctx.fillStyle = COLOR_BLACK;
   ctx.fillRect(x-ATOM_SIZE/2,y-ATOM_SIZE/2,ATOM_SIZE,ATOM_SIZE);
 
@@ -216,12 +225,13 @@ function drawTime(){
 function render(){
   ctx.clearRect(0,0,W,H);
 
+  /* efficiency bar */
   drawEfficiencyLayer(ctx,{
-    dayStart: DAY_START_MS,
-    dayEnd: Date.now(),
-    limitTime: efficiency.limitTime,
-    width: W,
-    height: H
+    dayStart:DAY_START_MS,
+    dayEnd:Date.now(),
+    limitTime:efficiency.limitTime,
+    width:W,
+    height:H
   });
 
   const baseY = H * 0.55;
@@ -231,7 +241,9 @@ function render(){
       efficiency.limitTime && tr.exit_time > efficiency.limitTime
         ? 0.25
         : 1;
-    drawAtom(timeToX(tr.entry_time), baseY, tr);
+
+    /* atom position is exit_time */
+    drawAtom(timeToX(tr.exit_time), baseY, tr);
   }
   ctx.globalAlpha = 1;
 
