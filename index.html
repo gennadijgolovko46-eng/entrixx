@@ -37,13 +37,23 @@ canvas {
   pointer-events: none;
   opacity: 0;
 }
+
+#back {
+  position: fixed;
+  bottom: 8px;
+  left: 8px;
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.45);
+}
 </style>
 </head>
+
 <body>
 
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
+<div id="back">Back</div>
 
 <script>
 const canvas = document.getElementById("c");
@@ -51,26 +61,25 @@ const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-const now = new Date();
-dateEl.textContent = now.toLocaleDateString("en-US", {
+const d = new Date();
+dateEl.textContent = d.toLocaleDateString("en-US", {
   weekday: "long",
   month: "short",
   day: "numeric",
   year: "numeric"
 });
 
-let viewW = 0;
-let viewH = 0;
+let W = 0;
+let H = 0;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  viewW = window.innerWidth;
-  viewH = window.innerHeight;
-
-  canvas.width = Math.round(viewW * dpr);
-  canvas.height = Math.round(viewH * dpr);
-  canvas.style.width = viewW + "px";
-  canvas.style.height = viewH + "px";
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resize);
@@ -86,61 +95,53 @@ canvas.addEventListener("pointerup", () => pointerX = null);
 canvas.addEventListener("pointerleave", () => pointerX = null);
 
 function xToTime(x) {
-  const minutes = Math.round((x / viewW) * 1440);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+  const m = Math.round((x / W) * 1440);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
 }
 
-/* ATOM CONSTANTS — CANON */
-const ATOM_SIZE = 4;
-const TAIL_W = 1;
+/* ===== ATOM ===== */
 
-const MARKET_HOURS = 8;
-const PX_PER_HOUR = 22;
-const MARKET_LEN = MARKET_HOURS * PX_PER_HOUR;
+const ATOM_SIZE = 6;
+const MARKET_LEN = 220;
+const HOLD_LEN = 90;
 
-const HOLD_COLOR = "#2F6BFF";
-const MARKET_COLOR = "#2DBE60";
-const ATOM_COLOR = "#000";
-
-const BASE_Y = () => viewH * 0.5;
-
-/* TEST ATOMS (CANON SCALE) */
-const atoms = [
-  { x: 0.47, hold: 40 },
-  { x: 0.50, hold: 90 },
-  { x: 0.53, hold: 15 }
-];
-
-function drawAtom(atom) {
-  const x = atom.x * viewW;
-  const y = BASE_Y();
-
-  const top = y - ATOM_SIZE / 2;
-
-  ctx.lineWidth = TAIL_W;
-
-  ctx.strokeStyle = MARKET_COLOR;
+function drawAtom(x, y, liquidated = false) {
+  // market
+  ctx.strokeStyle = "#2DBE60";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, top);
-  ctx.lineTo(x + ATOM_SIZE / 2, top - MARKET_LEN);
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - MARKET_LEN);
   ctx.stroke();
 
-  const holdLen = Math.max(atom.hold, 3);
-  ctx.strokeStyle = HOLD_COLOR;
+  // hold
+  ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
-  ctx.moveTo(x - ATOM_SIZE / 2, top);
-  ctx.lineTo(x - ATOM_SIZE / 2, top - holdLen);
+  ctx.moveTo(x - 3, y);
+  ctx.lineTo(x - 3, y - HOLD_LEN);
   ctx.stroke();
 
-  ctx.fillStyle = ATOM_COLOR;
+  // square
+  ctx.fillStyle = "#000";
   ctx.fillRect(
     x - ATOM_SIZE / 2,
     y - ATOM_SIZE / 2,
     ATOM_SIZE,
     ATOM_SIZE
   );
+
+  if (liquidated) {
+    ctx.strokeStyle = "#C00000";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 6, y - 6);
+    ctx.lineTo(x + 6, y + 6);
+    ctx.moveTo(x + 6, y - 6);
+    ctx.lineTo(x - 6, y + 6);
+    ctx.stroke();
+  }
 }
 
 function drawTime() {
@@ -148,11 +149,10 @@ function drawTime() {
     timeEl.style.opacity = 0;
     return;
   }
-
   ctx.strokeStyle = "rgba(0,0,0,0.25)";
   ctx.beginPath();
   ctx.moveTo(pointerX, 0);
-  ctx.lineTo(pointerX, viewH);
+  ctx.lineTo(pointerX, H);
   ctx.stroke();
 
   timeEl.textContent = xToTime(pointerX);
@@ -160,9 +160,15 @@ function drawTime() {
 }
 
 function render() {
-  ctx.clearRect(0, 0, viewW, viewH);
+  ctx.clearRect(0, 0, W, H);
 
-  for (const a of atoms) drawAtom(a);
+  const centerY = H * 0.55;
+  const gap = 24;
+  const startX = W * 0.5 - gap;
+
+  drawAtom(startX, centerY, false);
+  drawAtom(startX + gap, centerY, true);
+  drawAtom(startX + gap * 2, centerY, false);
 
   drawTime();
   requestAnimationFrame(render);
@@ -170,6 +176,5 @@ function render() {
 
 render();
 </script>
-
 </body>
 </html>
