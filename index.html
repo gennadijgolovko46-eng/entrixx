@@ -74,17 +74,24 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* utc day model */
+/* time constants */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const todayUTC = (() => {
-  const d = new Date();
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-})();
+/* today UTC (correct) */
+const now = new Date();
+const todayUTC = Date.UTC(
+  now.getUTCFullYear(),
+  now.getUTCMonth(),
+  now.getUTCDate()
+);
 
+/* current visible day */
 let currentDayUTC = todayUTC;
+
+/* lower bound (account creation day placeholder) */
 const MIN_DAY_UTC = 0;
 
+/* date label */
 function updateDateLabel() {
   const d = new Date(currentDayUTC);
   dateEl.textContent = d.toUTCString().slice(0, 16);
@@ -119,7 +126,7 @@ function xToTimeUTC(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* day paging */
+/* day paging (fixed direction) */
 let startX = null;
 
 canvas.addEventListener("pointerdown", e => {
@@ -133,13 +140,15 @@ canvas.addEventListener("pointerup", e => {
 
   if (Math.abs(dx) < 40) return;
 
-  if (dx < 0) {
+  if (dx > 0) {
+    /* swipe right -> past */
     const next = currentDayUTC - DAY_MS;
     if (next >= MIN_DAY_UTC) {
       currentDayUTC = next;
       updateDateLabel();
     }
   } else {
+    /* swipe left -> today */
     const next = currentDayUTC + DAY_MS;
     if (next <= todayUTC) {
       currentDayUTC = next;
@@ -178,7 +187,7 @@ const trades = [
 const exitTimes = trades.map(t => t.exit_time).sort((a,b)=>a-b);
 const efficiency = computeEfficiency(exitTimes);
 
-/* drawing */
+/* drawing helpers */
 function timeToX(t) {
   return ((t - currentDayUTC) / DAY_MS) * W;
 }
@@ -225,7 +234,7 @@ function drawTimeLine() {
 function render() {
   ctx.clearRect(0,0,W,H);
 
-  drawEfficiencyLayer(ctx, {
+  drawEfficiencyLayer(ctx,{
     dayStart: currentDayUTC,
     dayEnd: currentDayUTC + DAY_MS,
     limitTime: efficiency.limitTime,
