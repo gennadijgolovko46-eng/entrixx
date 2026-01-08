@@ -52,6 +52,7 @@ canvas { display: block; }
 <div id="date"></div>
 
 <script>
+/* setup */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -83,12 +84,10 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* time interaction */
+/* pointer time */
 let touchX = null;
 
-canvas.addEventListener("pointerdown", e => {
-  touchX = e.clientX;
-});
+canvas.addEventListener("pointerdown", e => touchX = e.clientX);
 canvas.addEventListener("pointermove", e => {
   if (touchX !== null) touchX = e.clientX;
 });
@@ -108,7 +107,7 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* ===== ATOM MODEL (CANON) ===== */
+/* ===== CANON ATOM ===== */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
@@ -119,31 +118,46 @@ const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-/* mock trades with real time axis */
+/* ===== REAL TRADE DATA (FORMAT = EXCHANGE) ===== */
 const trades = [
-  { exit: todayAt(9, 12), hold: 40,  dir: 1 },
-  { exit: todayAt(10, 5), hold: 90,  dir: -1 },
-  { exit: todayAt(10, 37), liquid: true },
-  { exit: todayAt(11, 20), hold: 120, dir: 1 },
-  { exit: todayAt(11, 42), hold: 20,  dir: -1 }
+  {
+    entry_time: todayAt(9, 10),
+    exit_time: todayAt(9, 42),
+    liquidation: false,
+    dir: 1
+  },
+  {
+    entry_time: todayAt(10, 5),
+    exit_time: todayAt(10, 7),
+    liquidation: true,
+    dir: -1
+  },
+  {
+    entry_time: todayAt(11, 15),
+    exit_time: null,
+    liquidation: false,
+    dir: 1
+  }
 ];
 
 function todayAt(h, m) {
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  return d;
+  return d.getTime();
 }
 
-/* x mapping by exit_time */
+/* time mapping */
 const dayStart = new Date();
 dayStart.setHours(0,0,0,0);
+const DAY_START_MS = dayStart.getTime();
 
 function timeToX(t) {
-  const span = now - dayStart;
+  const span = Date.now() - DAY_START_MS;
   if (span <= 0) return 0;
-  return ((t - dayStart) / span) * W;
+  return ((t - DAY_START_MS) / span) * W;
 }
 
+/* atom draw */
 function drawLiquidation(x, y) {
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
@@ -155,7 +169,7 @@ function drawLiquidation(x, y) {
   ctx.stroke();
 }
 
-function drawAtom(x, y, a) {
+function drawAtom(x, y, t) {
   const top = y - ATOM_SIZE / 2;
   const bottom = y + ATOM_SIZE / 2;
 
@@ -164,22 +178,30 @@ function drawAtom(x, y, a) {
   /* market */
   ctx.strokeStyle = COLOR_GREEN;
   ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
+  ctx.moveTo(x + ATOM_SIZE / 2, t.dir < 0 ? bottom : top);
   ctx.lineTo(
     x + ATOM_SIZE / 2,
-    a.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
+    t.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
   );
   ctx.stroke();
 
   /* blue */
-  if (!a.liquid) {
-    const blueLen = Math.max(a.hold, MIN_BLUE);
+  if (!t.liquidation) {
+    const endTime = t.exit_time || Date.now();
+    const holdMin = Math.max(
+      MIN_BLUE,
+      Math.min(
+        Math.round((endTime - t.entry_time) / 60000),
+        480
+      )
+    );
+
     ctx.strokeStyle = COLOR_BLUE;
     ctx.beginPath();
-    ctx.moveTo(x - ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
+    ctx.moveTo(x - ATOM_SIZE / 2, t.dir < 0 ? bottom : top);
     ctx.lineTo(
       x - ATOM_SIZE / 2,
-      a.dir < 0 ? bottom + blueLen : top - blueLen
+      t.dir < 0 ? bottom + holdMin : top - holdMin
     );
     ctx.stroke();
   }
@@ -193,9 +215,10 @@ function drawAtom(x, y, a) {
     ATOM_SIZE
   );
 
-  if (a.liquid) drawLiquidation(x, y);
+  if (t.liquidation) drawLiquidation(x, y);
 }
 
+/* render */
 function drawTime() {
   if (touchX === null) return;
 
@@ -210,14 +233,13 @@ function drawTime() {
   timeEl.style.opacity = 1;
 }
 
-/* render */
 function render() {
   ctx.clearRect(0, 0, W, H);
 
   const baseY = H * 0.55;
 
   for (let i = 0; i < trades.length; i++) {
-    const x = timeToX(trades[i].exit);
+    const x = timeToX(trades[i].entry_time);
     drawAtom(x, baseY, trades[i]);
   }
 
