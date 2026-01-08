@@ -50,7 +50,10 @@ const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-/* resize */
+/* ====== CONSTANTS (UTC ONLY) ====== */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/* ====== CANVAS ====== */
 let W = 0, H = 0;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -65,23 +68,30 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* time helpers */
-const DAY_MS = 24 * 60 * 60 * 1000;
+/* ====== UTC DAY STATE ====== */
+let currentDay = new Date(Date.UTC(
+  new Date().getUTCFullYear(),
+  new Date().getUTCMonth(),
+  new Date().getUTCDate()
+));
+
+function formatUTCDate(d) {
+  return d.toUTCString().slice(0, 16);
+}
+
+/* ====== TIME MAPPING ====== */
 function timeToX(t, dayStart) {
   return ((t - dayStart) / DAY_MS) * W;
 }
-function xToTime(x) {
-  const minutes = Math.floor((x / W) * 1440);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+
+function xToUTCTime(x) {
+  const totalMinutes = Math.floor((x / W) * 1440);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* day state */
-let currentDay = new Date();
-currentDay.setHours(0,0,0,0);
-
-/* DATA SOURCE (different days = different data) */
+/* ====== DATA (UTC DAYS) ====== */
 const tradeDB = {
   "2026-01-09": [
     [9,0,9,10,1],
@@ -99,45 +109,49 @@ const tradeDB = {
   ]
 };
 
-function buildTrades(day) {
-  const key = day.toISOString().slice(0,10);
+function buildTrades(dayUTC) {
+  const key = dayUTC.toISOString().slice(0,10);
   const rows = tradeDB[key];
   if (!rows) return [];
 
   return rows.map(r => {
-    const d1 = new Date(day);
-    const d2 = new Date(day);
-    d1.setHours(r[0], r[1], 0, 0);
-    d2.setHours(r[2], r[3], 0, 0);
+    const e = new Date(dayUTC);
+    const x = new Date(dayUTC);
+    e.setUTCHours(r[0], r[1], 0, 0);
+    x.setUTCHours(r[2], r[3], 0, 0);
     return {
-      entry_time: d1.getTime(),
-      exit_time: d2.getTime(),
+      entry_time: e.getTime(),
+      exit_time: x.getTime(),
       dir: r[4]
     };
   });
 }
 
-/* swipe paging */
+/* ====== SWIPE (DAY PAGING) ====== */
 let startX = null;
 canvas.addEventListener("pointerdown", e => startX = e.clientX);
 canvas.addEventListener("pointerup", e => {
   if (startX === null) return;
   const dx = e.clientX - startX;
-  if (Math.abs(dx) > 50) {
+  if (Math.abs(dx) > 60) {
     currentDay = new Date(currentDay.getTime() + (dx < 0 ? DAY_MS : -DAY_MS));
-    currentDay.setHours(0,0,0,0);
   }
   startX = null;
 });
 
-/* time cursor */
+/* ====== TIME CURSOR ====== */
+let cursorX = null;
 canvas.addEventListener("pointermove", e => {
-  timeEl.textContent = xToTime(e.clientX);
+  cursorX = e.clientX;
+  timeEl.textContent = xToUTCTime(cursorX);
   timeEl.style.opacity = 1;
 });
-canvas.addEventListener("pointerleave", () => timeEl.style.opacity = 0);
+canvas.addEventListener("pointerleave", () => {
+  cursorX = null;
+  timeEl.style.opacity = 0;
+});
 
-/* atom draw */
+/* ====== DRAW ATOM ====== */
 function drawAtom(x,y,tr){
   ctx.lineWidth = 1.2;
 
@@ -157,12 +171,12 @@ function drawAtom(x,y,tr){
   ctx.fillRect(x-1, y-1, 2, 2);
 }
 
-/* render */
+/* ====== RENDER ====== */
 function render(){
   ctx.clearRect(0,0,W,H);
 
   const dayStart = currentDay.getTime();
-  dateEl.textContent = currentDay.toDateString();
+  dateEl.textContent = formatUTCDate(currentDay);
 
   const trades = buildTrades(currentDay);
   const exitTimes = trades.map(t => t.exit_time);
@@ -179,6 +193,15 @@ function render(){
   const baseY = H * 0.55;
   for (const tr of trades) {
     drawAtom(timeToX(tr.entry_time, dayStart), baseY, tr);
+  }
+
+  /* vertical time line */
+  if (cursorX !== null) {
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.moveTo(cursorX, 0);
+    ctx.lineTo(cursorX, H);
+    ctx.stroke();
   }
 
   requestAnimationFrame(render);
