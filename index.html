@@ -16,7 +16,7 @@ canvas { display: block; }
 
 #date {
   position: fixed;
-  bottom: 8px;
+  bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
   font: 12px system-ui, sans-serif;
@@ -26,7 +26,7 @@ canvas { display: block; }
 
 #back {
   position: fixed;
-  bottom: 8px;
+  bottom: 14px;
   left: 8px;
   font: 12px system-ui, sans-serif;
   color: rgba(0,0,0,0.45);
@@ -51,7 +51,9 @@ canvas { display: block; }
 <div id="time"></div>
 <div id="date"></div>
 
-<script>
+<script type="module">
+import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
+
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -65,7 +67,8 @@ dateEl.textContent = now.toLocaleDateString("en-US", {
   year: "numeric"
 });
 
-let W = 0, H = 0;
+let W = 0;
+let H = 0;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -80,20 +83,21 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* time interaction */
+/* pointer time */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
 canvas.addEventListener("pointermove", e => {
   if (touchX !== null) touchX = e.clientX;
 });
-canvas.addEventListener("pointerup", resetTime);
-canvas.addEventListener("pointerleave", resetTime);
-
-function resetTime() {
+canvas.addEventListener("pointerup", () => {
   touchX = null;
   timeEl.style.opacity = 0;
-}
+});
+canvas.addEventListener("pointerleave", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
 
 function xToTime(x) {
   const minutes = Math.round((x / W) * 1440);
@@ -102,138 +106,129 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* constants */
+/* ===== CANON ATOM ===== */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
-const MARKET_HEIGHT = 160;
 const MIN_BLUE = 2;
+const MARKET_HEIGHT = 160;
 
 const COLOR_BLUE = "#2F6BFF";
 const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
-const COLOR_BEHAVIOR = "rgba(0,0,0,0.35)";
 
-/* data */
-const atoms = [
-  { exit: 100, hold: 40, market: 120, dir: -1 },
-  { exit: 240, hold: 90, market: 140, dir: 1  },
-  { exit: 300, liquid: true },
-  { exit: 360, hold: 20, market: 100, dir: -1 },
-  { exit: 480, hold: 60, market: 130, dir: 1  }
+/* demo trades (replace with exchange data later) */
+const trades = [
+  { entry_time: t(9,10), exit_time: t(9,42), liquidation: false, dir: 1 },
+  { entry_time: t(10,5), exit_time: t(10,7), liquidation: true, dir: -1 },
+  { entry_time: t(11,15), exit_time: t(11,45), liquidation: false, dir: 1 },
+  { entry_time: t(11,50), exit_time: t(12,30), liquidation: false, dir: -1 },
+  { entry_time: t(12,35), exit_time: t(12,36), liquidation: false, dir: 1 }
 ];
 
-/* efficiency limit */
-const limitIndex = atoms.findIndex(a => a.liquid);
+function t(h,m){
+  const d = new Date();
+  d.setHours(h,m,0,0);
+  return d.getTime();
+}
 
-/* draw */
-function drawLiquidation(x, y) {
+const dayStart = new Date();
+dayStart.setHours(0,0,0,0);
+const DAY_START_MS = dayStart.getTime();
+
+function timeToX(t) {
+  const span = Date.now() - DAY_START_MS;
+  if (span <= 0) return 0;
+  return ((t - DAY_START_MS) / span) * W;
+}
+
+/* efficiency */
+const exitTimes = trades
+  .filter(t => t.exit_time)
+  .map(t => t.exit_time)
+  .sort((a,b) => a - b);
+
+const efficiency = computeEfficiency(exitTimes);
+
+/* drawing */
+function drawLiquidation(x,y){
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(x - 5, y - 5);
-  ctx.lineTo(x + 5, y + 5);
-  ctx.moveTo(x + 5, y - 5);
-  ctx.lineTo(x - 5, y + 5);
+  ctx.moveTo(x-5,y-5);
+  ctx.lineTo(x+5,y+5);
+  ctx.moveTo(x+5,y-5);
+  ctx.lineTo(x-5,y+5);
   ctx.stroke();
 }
 
-function drawAtom(x, y, a, faded) {
-  ctx.globalAlpha = faded ? 0.25 : 1;
+function drawAtom(x,y,t){
+  const top = y - ATOM_SIZE/2;
+  const bottom = y + ATOM_SIZE/2;
 
   ctx.lineWidth = TAIL_WIDTH;
 
-  if (!a.liquid) {
-    ctx.strokeStyle = COLOR_GREEN;
-    ctx.beginPath();
-    ctx.moveTo(x + ATOM_SIZE/2, y);
-    ctx.lineTo(x + ATOM_SIZE/2, y - a.market * a.dir);
-    ctx.stroke();
+  ctx.strokeStyle = COLOR_GREEN;
+  ctx.beginPath();
+  ctx.moveTo(x+ATOM_SIZE/2, t.dir<0?bottom:top);
+  ctx.lineTo(x+ATOM_SIZE/2, t.dir<0?bottom+MARKET_HEIGHT:top-MARKET_HEIGHT);
+  ctx.stroke();
 
+  if(!t.liquidation){
+    const hold = Math.max(
+      MIN_BLUE,
+      Math.min(
+        Math.round((t.exit_time - t.entry_time)/60000),
+        480
+      )
+    );
     ctx.strokeStyle = COLOR_BLUE;
     ctx.beginPath();
-    ctx.moveTo(x - ATOM_SIZE/2, y);
-    ctx.lineTo(x - ATOM_SIZE/2, y - Math.max(a.hold, MIN_BLUE) * a.dir);
+    ctx.moveTo(x-ATOM_SIZE/2, t.dir<0?bottom:top);
+    ctx.lineTo(x-ATOM_SIZE/2, t.dir<0?bottom+hold:top-hold);
     ctx.stroke();
   }
 
   ctx.fillStyle = COLOR_BLACK;
-  ctx.fillRect(x - ATOM_SIZE/2, y - ATOM_SIZE/2, ATOM_SIZE, ATOM_SIZE);
+  ctx.fillRect(x-ATOM_SIZE/2,y-ATOM_SIZE/2,ATOM_SIZE,ATOM_SIZE);
 
-  if (a.liquid) drawLiquidation(x, y);
+  if(t.liquidation) drawLiquidation(x,y);
+}
 
+function drawTime(){
+  if(touchX===null) return;
+  ctx.strokeStyle="rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.moveTo(touchX,0);
+  ctx.lineTo(touchX,H);
+  ctx.stroke();
+  timeEl.textContent = xToTime(touchX);
+  timeEl.style.opacity=1;
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+
+  drawEfficiencyLayer(ctx,{
+    dayStart:DAY_START_MS,
+    dayEnd:Date.now(),
+    limitTime:efficiency.limitTime,
+    width:W,
+    height:H
+  });
+
+  const baseY = H*0.55;
+
+  for(const tr of trades){
+    ctx.globalAlpha =
+      efficiency.limitTime && tr.exit_time && tr.exit_time > efficiency.limitTime
+        ? 0.25
+        : 1;
+    drawAtom(timeToX(tr.entry_time),baseY,tr);
+  }
   ctx.globalAlpha = 1;
-}
 
-/* behavior line */
-function drawBehavior(xs, baseY) {
-  let value = 0;
-  ctx.strokeStyle = COLOR_BEHAVIOR;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-
-  for (let i = 0; i < limitIndex; i++) {
-    const a = atoms[i];
-    const delta = a.hold - a.market;
-    value += Math.max(-20, Math.min(20, delta * 0.05));
-    const y = baseY - value;
-    if (i === 0) ctx.moveTo(xs[i], y);
-    else ctx.lineTo(xs[i], y);
-  }
-
-  ctx.stroke();
-}
-
-/* efficiency bar */
-function drawEfficiencyBar(xs) {
-  const y = H - 4;
-  ctx.lineWidth = 4;
-
-  ctx.strokeStyle = "#2DBE60";
-  ctx.beginPath();
-  ctx.moveTo(0, y);
-  ctx.lineTo(xs[limitIndex], y);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#D10000";
-  ctx.beginPath();
-  ctx.moveTo(xs[limitIndex], y - 6);
-  ctx.lineTo(xs[limitIndex], y + 6);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#bbb";
-  ctx.beginPath();
-  ctx.moveTo(xs[limitIndex], y);
-  ctx.lineTo(W, y);
-  ctx.stroke();
-}
-
-/* render */
-function render() {
-  ctx.clearRect(0, 0, W, H);
-
-  const baseY = H * 0.55;
-  const xs = atoms.map(a => (a.exit / 1440) * W);
-
-  drawBehavior(xs, baseY);
-
-  for (let i = 0; i < atoms.length; i++) {
-    drawAtom(xs[i], baseY, atoms[i], i > limitIndex);
-  }
-
-  drawEfficiencyBar(xs);
-
-  if (touchX !== null) {
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.beginPath();
-    ctx.moveTo(touchX, 0);
-    ctx.lineTo(touchX, H);
-    ctx.stroke();
-
-    timeEl.textContent = xToTime(touchX);
-    timeEl.style.opacity = 1;
-  }
-
+  drawTime();
   requestAnimationFrame(render);
 }
 
