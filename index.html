@@ -12,10 +12,7 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-
-canvas {
-  display: block;
-}
+canvas { display: block; }
 
 #date {
   position: fixed;
@@ -27,17 +24,6 @@ canvas {
   pointer-events: none;
 }
 
-#time {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.9);
-  pointer-events: none;
-  opacity: 0;
-}
-
 #back {
   position: fixed;
   bottom: 8px;
@@ -45,15 +31,25 @@ canvas {
   font: 12px system-ui, sans-serif;
   color: rgba(0,0,0,0.45);
 }
+
+#time {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.9);
+  opacity: 0;
+  pointer-events: none;
+}
 </style>
 </head>
-
 <body>
 
 <canvas id="c"></canvas>
+<div id="back">Back</div>
 <div id="time"></div>
 <div id="date"></div>
-<div id="back">Back</div>
 
 <script>
 const canvas = document.getElementById("c");
@@ -61,8 +57,8 @@ const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-const d = new Date();
-dateEl.textContent = d.toLocaleDateString("en-US", {
+const now = new Date();
+dateEl.textContent = now.toLocaleDateString("en-US", {
   weekday: "long",
   month: "short",
   day: "numeric",
@@ -85,46 +81,89 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-let pointerX = null;
+/* time interaction */
+let touchX = null;
 
-canvas.addEventListener("pointerdown", e => pointerX = e.clientX);
-canvas.addEventListener("pointermove", e => {
-  if (pointerX !== null) pointerX = e.clientX;
+canvas.addEventListener("pointerdown", e => {
+  touchX = e.clientX;
 });
-canvas.addEventListener("pointerup", () => pointerX = null);
-canvas.addEventListener("pointerleave", () => pointerX = null);
+canvas.addEventListener("pointermove", e => {
+  if (touchX !== null) touchX = e.clientX;
+});
+canvas.addEventListener("pointerup", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
+canvas.addEventListener("pointerleave", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
 
 function xToTime(x) {
-  const m = Math.round((x / W) * 1440);
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return String(h).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  const minutes = Math.round((x / W) * 1440);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* ===== ATOM ===== */
+/* model */
+const ATOM_SIZE = 2;
+const TAIL_WIDTH = 1.2;
+const MIN_BLUE = 2;
+const MARKET_HEIGHT = 160;
 
-const ATOM_SIZE = 6;
-const MARKET_LEN = 220;
-const HOLD_LEN = 90;
+const COLOR_BLUE = "#2F6BFF";
+const COLOR_GREEN = "#2DBE60";
+const COLOR_BLACK = "#000";
+const COLOR_RED = "#D10000";
 
-function drawAtom(x, y, liquidated = false) {
-  // market
-  ctx.strokeStyle = "#2DBE60";
-  ctx.lineWidth = 1;
+const atoms = [
+  { hold: 40,  dir: -1 },
+  { hold: 90,  dir: 1  },
+  { liquid: true },
+  { hold: 120, dir: 1  },
+  { hold: 20,  dir: -1 }
+];
+
+function drawLiquidation(x, y) {
+  ctx.strokeStyle = COLOR_RED;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x, y - MARKET_LEN);
+  ctx.moveTo(x - 5, y - 5);
+  ctx.lineTo(x + 5, y + 5);
+  ctx.moveTo(x + 5, y - 5);
+  ctx.lineTo(x - 5, y + 5);
+  ctx.stroke();
+}
+
+function drawAtom(x, y, a) {
+  const top = y - ATOM_SIZE / 2;
+  const bottom = y + ATOM_SIZE / 2;
+
+  ctx.lineWidth = TAIL_WIDTH;
+
+  ctx.strokeStyle = COLOR_GREEN;
+  ctx.beginPath();
+  ctx.moveTo(x + ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
+  ctx.lineTo(
+    x + ATOM_SIZE / 2,
+    a.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
+  );
   ctx.stroke();
 
-  // hold
-  ctx.strokeStyle = "#2F6BFF";
-  ctx.beginPath();
-  ctx.moveTo(x - 3, y);
-  ctx.lineTo(x - 3, y - HOLD_LEN);
-  ctx.stroke();
+  if (!a.liquid) {
+    const blueLen = Math.max(a.hold, MIN_BLUE);
+    ctx.strokeStyle = COLOR_BLUE;
+    ctx.beginPath();
+    ctx.moveTo(x - ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
+    ctx.lineTo(
+      x - ATOM_SIZE / 2,
+      a.dir < 0 ? bottom + blueLen : top - blueLen
+    );
+    ctx.stroke();
+  }
 
-  // square
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = COLOR_BLACK;
   ctx.fillRect(
     x - ATOM_SIZE / 2,
     y - ATOM_SIZE / 2,
@@ -132,43 +171,33 @@ function drawAtom(x, y, liquidated = false) {
     ATOM_SIZE
   );
 
-  if (liquidated) {
-    ctx.strokeStyle = "#C00000";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x - 6, y - 6);
-    ctx.lineTo(x + 6, y + 6);
-    ctx.moveTo(x + 6, y - 6);
-    ctx.lineTo(x - 6, y + 6);
-    ctx.stroke();
-  }
+  if (a.liquid) drawLiquidation(x, y);
 }
 
 function drawTime() {
-  if (pointerX === null) {
-    timeEl.style.opacity = 0;
-    return;
-  }
+  if (touchX === null) return;
+
   ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(pointerX, 0);
-  ctx.lineTo(pointerX, H);
+  ctx.moveTo(touchX, 0);
+  ctx.lineTo(touchX, H);
   ctx.stroke();
 
-  timeEl.textContent = xToTime(pointerX);
+  timeEl.textContent = xToTime(touchX);
   timeEl.style.opacity = 1;
 }
 
 function render() {
   ctx.clearRect(0, 0, W, H);
 
-  const centerY = H * 0.55;
-  const gap = 24;
-  const startX = W * 0.5 - gap;
+  const baseY = H * 0.55;
+  const gap = 16;
+  let startX = W / 2 - (atoms.length - 1) * gap / 2;
 
-  drawAtom(startX, centerY, false);
-  drawAtom(startX + gap, centerY, true);
-  drawAtom(startX + gap * 2, centerY, false);
+  for (let i = 0; i < atoms.length; i++) {
+    drawAtom(startX + i * gap, baseY, atoms[i]);
+  }
 
   drawTime();
   requestAnimationFrame(render);
@@ -176,5 +205,6 @@ function render() {
 
 render();
 </script>
+
 </body>
 </html>
