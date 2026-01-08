@@ -24,14 +24,6 @@ canvas { display: block; touch-action: none; }
   pointer-events: none;
 }
 
-#back {
-  position: fixed;
-  bottom: 14px;
-  left: 8px;
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.45);
-}
-
 #time {
   position: fixed;
   top: 8px;
@@ -47,7 +39,6 @@ canvas { display: block; touch-action: none; }
 <body>
 
 <canvas id="c"></canvas>
-<div id="back">Back</div>
 <div id="time"></div>
 <div id="date"></div>
 
@@ -58,14 +49,6 @@ const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
-
-/* date */
-dateEl.textContent = new Date().toLocaleDateString("en-US", {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-  year: "numeric"
-});
 
 /* resize */
 let W = 0, H = 0;
@@ -84,89 +67,76 @@ resize();
 
 /* helpers */
 function t(h,m){
-  const d = new Date();
+  const d = new Date(currentDay);
   d.setHours(h,m,0,0);
   return d.getTime();
 }
 
-/* trades */
-const trades = [
-  { entry_time: t(9, 0),  exit_time: t(9,10), dir: 1 },
-  { entry_time: t(9,10), exit_time: t(9,20), dir: 1 },
-  { entry_time: t(9,20), exit_time: t(9,30), dir: 1 },
-  { entry_time: t(9,30), exit_time: t(9,40), dir: 1 },
-  { entry_time: t(9,40), exit_time: t(9,50), dir: 1 },
-  { entry_time: t(9,50), exit_time: t(9,51), dir:-1 },
-  { entry_time: t(9,51), exit_time: t(10,30),dir: 1 },
-  { entry_time: t(10,30),exit_time: t(10,31),dir:-1 }
-];
+/* day control */
+const DAY_MS = 24 * 60 * 60 * 1000;
+let currentDay = new Date();
+currentDay.setHours(0,0,0,0);
 
-/* efficiency */
-const exitTimes = trades.map(t => t.exit_time).filter(Boolean).sort((a,b)=>a-b);
-const efficiency = computeEfficiency(exitTimes);
-
-/* === TIME WINDOW (FIXED) === */
-const WINDOW_MS = 24 * 60 * 60 * 1000;
-const ACCOUNT_START_MS = new Date("2022-01-01T00:00:00Z").getTime();
-
-const lastTradeTime = Math.max(...exitTimes);
-let viewEnd = lastTradeTime + WINDOW_MS * 0.1;
-let viewStart = viewEnd - WINDOW_MS;
+/* trades (demo) */
+function getTradesForDay() {
+  return [
+    { entry_time: t(9,0),  exit_time: t(9,10), dir: 1 },
+    { entry_time: t(9,10), exit_time: t(9,20), dir: 1 },
+    { entry_time: t(9,20), exit_time: t(9,30), dir: 1 },
+    { entry_time: t(9,30), exit_time: t(9,40), dir: 1 },
+    { entry_time: t(9,40), exit_time: t(9,50), dir: 1 },
+    { entry_time: t(9,50), exit_time: t(9,51), dir:-1 },
+    { entry_time: t(9,51), exit_time: t(10,30),dir: 1 }
+  ];
+}
 
 /* mapping */
 function timeToX(t) {
-  return ((t - viewStart) / (viewEnd - viewStart)) * W;
+  return ((t - dayStart) / DAY_MS) * W;
 }
 
 function xToTime(x) {
-  const t = viewStart + (x / W) * (viewEnd - viewStart);
-  const d = new Date(t);
-  return String(d.getHours()).padStart(2,"0") + ":" +
-         String(d.getMinutes()).padStart(2,"0");
+  const minutes = Math.floor((x / W) * 1440);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* drag */
-let dragging = false;
-let dragStartX = 0;
-let dragViewStart = 0;
+/* swipe paging */
+let startX = null;
 
 canvas.addEventListener("pointerdown", e => {
-  dragging = true;
-  dragStartX = e.clientX;
-  dragViewStart = viewStart;
+  startX = e.clientX;
 });
 
-canvas.addEventListener("pointermove", e => {
-  if (!dragging) return;
-  const dx = e.clientX - dragStartX;
-  const dt = -(dx / W) * WINDOW_MS;
-
-  let nextStart = dragViewStart + dt;
-  let nextEnd = nextStart + WINDOW_MS;
-
-  if (nextStart < ACCOUNT_START_MS) {
-    nextStart = ACCOUNT_START_MS;
-    nextEnd = nextStart + WINDOW_MS;
+canvas.addEventListener("pointerup", e => {
+  if (startX === null) return;
+  const dx = e.clientX - startX;
+  if (Math.abs(dx) > 50) {
+    currentDay = new Date(currentDay.getTime() + (dx < 0 ? DAY_MS : -DAY_MS));
+    currentDay.setHours(0,0,0,0);
   }
-
-  viewStart = nextStart;
-  viewEnd = nextEnd;
+  startX = null;
 });
 
-canvas.addEventListener("pointerup", () => dragging = false);
-canvas.addEventListener("pointerleave", () => dragging = false);
+/* time cursor */
+canvas.addEventListener("pointermove", e => {
+  timeEl.textContent = xToTime(e.clientX);
+  timeEl.style.opacity = 1;
+});
+
+canvas.addEventListener("pointerleave", () => {
+  timeEl.style.opacity = 0;
+});
 
 /* atom drawing */
-const ATOM_SIZE = 2;
-const MARKET_HEIGHT = 160;
-
-function drawAtom(x, y, tr) {
+function drawAtom(x,y,tr){
   ctx.lineWidth = 1.2;
 
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x+1, y);
-  ctx.lineTo(x+1, y - MARKET_HEIGHT * tr.dir);
+  ctx.lineTo(x+1, y - 160 * tr.dir);
   ctx.stroke();
 
   ctx.strokeStyle = "#2F6BFF";
@@ -180,12 +150,23 @@ function drawAtom(x, y, tr) {
 }
 
 /* render */
+let trades = [];
+let efficiency = { limitTime: null };
+let dayStart = 0;
+
 function render() {
   ctx.clearRect(0,0,W,H);
 
+  dayStart = currentDay.getTime();
+  dateEl.textContent = currentDay.toDateString();
+
+  trades = getTradesForDay();
+  const exitTimes = trades.map(t=>t.exit_time);
+  efficiency = computeEfficiency(exitTimes);
+
   drawEfficiencyLayer(ctx,{
-    dayStart: viewStart,
-    dayEnd: viewEnd,
+    dayStart,
+    dayEnd: dayStart + DAY_MS,
     limitTime: efficiency.limitTime,
     width: W,
     height: H
@@ -194,12 +175,8 @@ function render() {
   const baseY = H * 0.55;
 
   for (const tr of trades) {
-    if (tr.exit_time < viewStart || tr.entry_time > viewEnd) continue;
-    ctx.globalAlpha =
-      efficiency.limitTime && tr.exit_time > efficiency.limitTime ? 0.25 : 1;
     drawAtom(timeToX(tr.entry_time), baseY, tr);
   }
-  ctx.globalAlpha = 1;
 
   requestAnimationFrame(render);
 }
