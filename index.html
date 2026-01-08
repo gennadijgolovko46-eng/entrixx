@@ -83,6 +83,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+/* pointer time */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
@@ -105,7 +106,7 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* atom canon */
+/* ===== CANON ATOM ===== */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
@@ -116,7 +117,7 @@ const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-/* trades */
+/* demo trades (replace with exchange data later) */
 const trades = [
   { entry_time: t(9,10), exit_time: t(9,42), liquidation: false, dir: 1 },
   { entry_time: t(10,5), exit_time: t(10,7), liquidation: true, dir: -1 },
@@ -136,7 +137,9 @@ dayStart.setHours(0,0,0,0);
 const DAY_START_MS = dayStart.getTime();
 
 function timeToX(t) {
-  return ((t - DAY_START_MS) / (Date.now() - DAY_START_MS)) * W;
+  const span = Date.now() - DAY_START_MS;
+  if (span <= 0) return 0;
+  return ((t - DAY_START_MS) / span) * W;
 }
 
 /* efficiency */
@@ -147,6 +150,7 @@ const exitTimes = trades
 
 const efficiency = computeEfficiency(exitTimes);
 
+/* drawing */
 function drawLiquidation(x,y){
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
@@ -215,9 +219,14 @@ function render(){
 
   const baseY = H*0.55;
 
-  for(const t of trades){
-    drawAtom(timeToX(t.entry_time),baseY,t);
+  for(const tr of trades){
+    ctx.globalAlpha =
+      efficiency.limitTime && tr.exit_time && tr.exit_time > efficiency.limitTime
+        ? 0.25
+        : 1;
+    drawAtom(timeToX(tr.entry_time),baseY,tr);
   }
+  ctx.globalAlpha = 1;
 
   drawTime();
   requestAnimationFrame(render);
