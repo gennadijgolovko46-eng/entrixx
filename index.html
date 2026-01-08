@@ -1,56 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ENTRIXX</title>
-
-<style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: #ffffff;
-  overflow: hidden;
-}
-canvas { display: block; }
-
-#date {
-  position: fixed;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.45);
-  pointer-events: none;
-}
-
-#back {
-  position: fixed;
-  bottom: 14px;
-  left: 8px;
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.45);
-}
-
-#time {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.9);
-  opacity: 0;
-  pointer-events: none;
-}
-</style>
-</head>
-<body>
-
-<canvas id="c"></canvas>
-<div id="back">Back</div>
-<div id="time"></div>
-<div id="date"></div>
-
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 
@@ -59,9 +6,16 @@ const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-/* date */
-const now = new Date();
-dateEl.textContent = now.toLocaleDateString("en-US", {
+/* CONFIG */
+const ACCOUNT_START_MS = new Date("2022-01-01T00:00:00Z").getTime();
+const NOW_MS = Date.now();
+
+/* initial view: last day */
+let viewStart = NOW_MS - 24 * 60 * 60 * 1000;
+let viewEnd   = NOW_MS;
+
+/* date label */
+dateEl.textContent = new Date().toLocaleDateString("en-US", {
   weekday: "long",
   month: "short",
   day: "numeric",
@@ -85,9 +39,39 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+/* time mapping */
+function timeToX(t) {
+  const span = viewEnd - viewStart;
+  if (span <= 0) return 0;
+  return ((t - viewStart) / span) * W;
+}
+
+function xToTime(x) {
+  const t = viewStart + (x / W) * (viewEnd - viewStart);
+  const d = new Date(t);
+  const h = String(d.getHours()).padStart(2,"0");
+  const m = String(d.getMinutes()).padStart(2,"0");
+  return h + ":" + m;
+}
+
+/* discrete scroll */
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+
+  const span = viewEnd - viewStart;
+  const step = span * 0.1;
+
+  if (e.deltaY > 0) {
+    viewStart = Math.max(ACCOUNT_START_MS, viewStart - step);
+    viewEnd   = Math.max(viewStart + step, viewEnd - step);
+  } else {
+    viewStart = Math.min(viewEnd - step, viewStart + step);
+    viewEnd   = Math.min(NOW_MS, viewEnd + step);
+  }
+}, { passive:false });
+
 /* pointer time */
 let touchX = null;
-
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
 canvas.addEventListener("pointermove", e => {
   if (touchX !== null) touchX = e.clientX;
@@ -101,163 +85,71 @@ canvas.addEventListener("pointerleave", () => {
   timeEl.style.opacity = 0;
 });
 
-function xToTime(x) {
-  const minutes = Math.round((x / W) * 1440);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
-}
-
 /* helpers */
-function t(h, m) {
+function t(h,m){
   const d = new Date();
-  d.setHours(h, m, 0, 0);
+  d.setHours(h,m,0,0);
   return d.getTime();
 }
 
 /* demo trades */
 const trades = [
-  { entry_time: t(9, 0),  exit_time: t(9,10), liquidation:false, dir: 1 },
-  { entry_time: t(9,10), exit_time: t(9,20), liquidation:false, dir: 1 },
-  { entry_time: t(9,20), exit_time: t(9,30), liquidation:false, dir: 1 },
-  { entry_time: t(9,30), exit_time: t(9,40), liquidation:false, dir: 1 },
-  { entry_time: t(9,40), exit_time: t(9,50), liquidation:false, dir: 1 },
-
-  /* rhythm break */
-  { entry_time: t(9,50), exit_time: t(9,51), liquidation:false, dir:-1 },
-  { entry_time: t(9,51), exit_time: t(10,30), liquidation:false, dir: 1 },
-  { entry_time: t(10,30),exit_time: t(10,31), liquidation:false, dir:-1 }
+  { entry_time: t(9,0),  exit_time: t(9,10), dir: 1 },
+  { entry_time: t(9,10), exit_time: t(9,20), dir: 1 },
+  { entry_time: t(9,20), exit_time: t(9,30), dir: 1 },
+  { entry_time: t(9,30), exit_time: t(9,40), dir: 1 },
+  { entry_time: t(9,40), exit_time: t(9,50), dir: 1 },
+  { entry_time: t(9,50), exit_time: t(9,51), dir:-1 },
+  { entry_time: t(9,51), exit_time: t(10,30),dir: 1 },
+  { entry_time: t(10,30),exit_time: t(10,31),dir:-1 }
 ];
 
-/* day mapping */
-const dayStart = new Date();
-dayStart.setHours(0,0,0,0);
-const DAY_START_MS = dayStart.getTime();
-const DAY_END_MS = dayStart.getTime() + 24 * 60 * 60 * 1000;
-
-function timeToX(ts) {
-  return ((ts - DAY_START_MS) / (DAY_END_MS - DAY_START_MS)) * W;
-}
-
-/* efficiency (EXITS ONLY) */
-const exitTimes = trades
-  .map(t => t.exit_time)
-  .filter(Boolean)
-  .sort((a,b) => a - b);
-
+/* efficiency */
+const exitTimes = trades.map(t => t.exit_time).filter(Boolean);
 const efficiency = computeEfficiency(exitTimes);
-console.log("limitTime =", efficiency.limitTime);
 
-/* atom constants */
+/* atom config */
 const ATOM_SIZE = 2;
-const TAIL_WIDTH = 1.2;
-const MIN_BLUE = 2;
-const MARKET_HEIGHT = 160;
-
-const COLOR_BLUE = "#2F6BFF";
-const COLOR_GREEN = "#2DBE60";
-const COLOR_BLACK = "#000";
-const COLOR_RED = "#D10000";
-
-/* draw atom */
-function drawLiquidation(x, y) {
-  ctx.strokeStyle = COLOR_RED;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(x-5, y-5);
-  ctx.lineTo(x+5, y+5);
-  ctx.moveTo(x+5, y-5);
-  ctx.lineTo(x-5, y+5);
-  ctx.stroke();
-}
-
-function drawAtom(x, y, tr) {
-  const top = y - ATOM_SIZE / 2;
-  const bottom = y + ATOM_SIZE / 2;
-
-  ctx.lineWidth = TAIL_WIDTH;
-
-  /* market tail (once) */
-  ctx.strokeStyle = COLOR_GREEN;
-  ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, tr.dir < 0 ? bottom : top);
-  ctx.lineTo(
-    x + ATOM_SIZE / 2,
-    tr.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
-  );
-  ctx.stroke();
-
-  /* hold tail (once) */
-  if (!tr.liquidation) {
-    const hold = Math.max(
-      MIN_BLUE,
-      Math.min(Math.round((tr.exit_time - tr.entry_time) / 60000), 480)
-    );
-    ctx.strokeStyle = COLOR_BLUE;
-    ctx.beginPath();
-    ctx.moveTo(x - ATOM_SIZE / 2, tr.dir < 0 ? bottom : top);
-    ctx.lineTo(
-      x - ATOM_SIZE / 2,
-      tr.dir < 0 ? bottom + hold : top - hold
-    );
-    ctx.stroke();
-  }
-
-  /* atom */
-  ctx.fillStyle = COLOR_BLACK;
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
-
-  if (tr.liquidation) drawLiquidation(x, y);
-}
-
-/* time line */
-function drawTime() {
-  if (touchX === null) return;
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(touchX, 0);
-  ctx.lineTo(touchX, H);
-  ctx.stroke();
-  timeEl.textContent = xToTime(touchX);
-  timeEl.style.opacity = 1;
-}
+const BASE_Y_FACTOR = 0.55;
 
 /* render */
-function render() {
-  ctx.clearRect(0, 0, W, H);
+function render(){
+  ctx.clearRect(0,0,W,H);
 
-  /* efficiency layer (red line strictly by time) */
-  drawEfficiencyLayer(ctx, {
-    dayStart: DAY_START_MS,
-    dayEnd: DAY_END_MS,
+  drawEfficiencyLayer(ctx,{
+    dayStart: viewStart,
+    dayEnd: viewEnd,
     limitTime: efficiency.limitTime,
     width: W,
     height: H
   });
 
-  const baseY = H * 0.55;
+  const baseY = H * BASE_Y_FACTOR;
 
-  for (const tr of trades) {
+  for(const tr of trades){
     ctx.globalAlpha =
       efficiency.limitTime && tr.exit_time > efficiency.limitTime
         ? 0.25
         : 1;
 
-    drawAtom(timeToX(tr.entry_time), baseY, tr);
+    const x = timeToX(tr.entry_time);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(x-1, baseY-1, 2, 2);
   }
   ctx.globalAlpha = 1;
 
-  drawTime();
+  if(touchX !== null){
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.moveTo(touchX,0);
+    ctx.lineTo(touchX,H);
+    ctx.stroke();
+    timeEl.textContent = xToTime(touchX);
+    timeEl.style.opacity = 1;
+  }
+
   requestAnimationFrame(render);
 }
 
 render();
-</script>
-</body>
-</html>
+   </script>
