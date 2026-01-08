@@ -1,4 +1,4 @@
-// efficiency.js — Efficiency Layer V1 (locked)
+// efficiency.js — Efficiency Layer (canonical)
 
 const WINDOW_SIZE = 6;
 const THRESHOLD = 3.5e10;
@@ -34,43 +34,42 @@ export function computeEfficiency(exits) {
 }
 
 export function drawEfficiencyLayer(ctx, opts) {
-  const {
-    dayStart,
-    dayEnd,
-    limitTime,
-    width,
-    height,
-    barHeight = 6
-  } = opts;
-
-  const y = height - barHeight;
+  const { dayStart, dayEnd, limitTime, width, height, barHeight = 6 } = opts;
 
   function timeToX(t) {
     const span = dayEnd - dayStart;
-    return span > 0 ? ((t - dayStart) / span) * width : 0;
+    if (span <= 0) return 0;
+    return ((t - dayStart) / span) * width;
   }
 
   ctx.save();
 
-  // green baseline
-  ctx.fillStyle = "#2DBE60";
-  ctx.fillRect(0, y, width, barHeight);
+  const yBar = height - barHeight;
 
-  if (limitTime) {
-    const x = timeToX(limitTime);
-
-    // gray zone after limit
-    ctx.fillStyle = "#B0B0B0";
-    ctx.fillRect(x, y, width - x, barHeight);
-
-    // red line on top
-    ctx.strokeStyle = "#E53935";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, y - 2);
-    ctx.lineTo(x + 0.5, y + barHeight + 2);
-    ctx.stroke();
+  if (!limitTime) {
+    ctx.fillStyle = "#2DBE60";
+    ctx.fillRect(0, yBar, width, barHeight);
+    ctx.restore();
+    return;
   }
+
+  const xLimit = timeToX(limitTime);
+
+  // green zone
+  ctx.fillStyle = "#2DBE60";
+  ctx.fillRect(0, yBar, xLimit, barHeight);
+
+  // red vertical line — full height
+  ctx.strokeStyle = "#D10000";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(xLimit + 0.5, 0);
+  ctx.lineTo(xLimit + 0.5, height);
+  ctx.stroke();
+
+  // grey zone
+  ctx.fillStyle = "#B0B0B0";
+  ctx.fillRect(xLimit, yBar, width - xLimit, barHeight);
 
   ctx.restore();
 }
