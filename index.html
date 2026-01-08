@@ -59,6 +59,7 @@ const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
+/* date */
 const now = new Date();
 dateEl.textContent = now.toLocaleDateString("en-US", {
   weekday: "long",
@@ -67,6 +68,7 @@ dateEl.textContent = now.toLocaleDateString("en-US", {
   year: "numeric"
 });
 
+/* resize */
 let W = 0;
 let H = 0;
 
@@ -83,6 +85,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+/* pointer time */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
@@ -105,6 +108,7 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
+/* atom config */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
@@ -115,20 +119,26 @@ const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-const trades = [
-  { entry_time: t(9,10), exit_time: t(9,42), liquidation: false, dir: 1 },
-  { entry_time: t(10,5), exit_time: t(10,7), liquidation: true, dir: -1 },
-  { entry_time: t(11,15), exit_time: t(11,45), liquidation: false, dir: 1 },
-  { entry_time: t(11,50), exit_time: t(12,30), liquidation: false, dir: -1 },
-  { entry_time: t(12,35), exit_time: t(12,36), liquidation: false, dir: 1 }
-];
-
+/* helpers */
 function t(h,m){
   const d = new Date();
   d.setHours(h,m,0,0);
   return d.getTime();
 }
 
+/* trades to trigger efficiency break */
+const trades = [
+  { entry_time: t(9, 0),  exit_time: t(9,10), liquidation:false, dir:1 },
+  { entry_time: t(9,10), exit_time: t(9,20), liquidation:false, dir:1 },
+  { entry_time: t(9,20), exit_time: t(9,30), liquidation:false, dir:1 },
+  { entry_time: t(9,30), exit_time: t(9,40), liquidation:false, dir:1 },
+  { entry_time: t(9,40), exit_time: t(9,50), liquidation:false, dir:1 },
+  { entry_time: t(9,50), exit_time: t(9,51), liquidation:false, dir:-1 },
+  { entry_time: t(9,51), exit_time: t(10,30), liquidation:false, dir:1 },
+  { entry_time: t(10,30),exit_time: t(10,31), liquidation:false, dir:-1 }
+];
+
+/* day mapping */
 const dayStart = new Date();
 dayStart.setHours(0,0,0,0);
 const DAY_START_MS = dayStart.getTime();
@@ -139,13 +149,15 @@ function timeToX(t) {
   return ((t - DAY_START_MS) / span) * W;
 }
 
+/* efficiency */
 const exitTimes = trades
-  .filter(t => t.exit_time)
   .map(t => t.exit_time)
+  .filter(Boolean)
   .sort((a,b) => a - b);
 
 const efficiency = computeEfficiency(exitTimes);
 
+/* drawing */
 function drawLiquidation(x,y){
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
@@ -216,7 +228,7 @@ function render(){
 
   for(const tr of trades){
     ctx.globalAlpha =
-      efficiency.limitTime && tr.exit_time && tr.exit_time > efficiency.limitTime
+      efficiency.limitTime && tr.exit_time > efficiency.limitTime
         ? 0.25
         : 1;
     drawAtom(timeToX(tr.entry_time), baseY, tr);
