@@ -12,7 +12,10 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-canvas { display: block; }
+
+canvas {
+  display: block;
+}
 
 #date {
   position: fixed;
@@ -44,6 +47,7 @@ canvas { display: block; }
 }
 </style>
 </head>
+
 <body>
 
 <canvas id="c"></canvas>
@@ -51,7 +55,9 @@ canvas { display: block; }
 <div id="time"></div>
 <div id="date"></div>
 
-<script>
+<script type="module">
+import { drawAtom } from "./atom.js";
+
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -78,6 +84,7 @@ function resize() {
   canvas.style.height = H + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+
 window.addEventListener("resize", resize);
 resize();
 
@@ -87,13 +94,16 @@ let touchX = null;
 canvas.addEventListener("pointerdown", e => {
   touchX = e.clientX;
 });
+
 canvas.addEventListener("pointermove", e => {
   if (touchX !== null) touchX = e.clientX;
 });
+
 canvas.addEventListener("pointerup", () => {
   touchX = null;
   timeEl.style.opacity = 0;
 });
+
 canvas.addEventListener("pointerleave", () => {
   touchX = null;
   timeEl.style.opacity = 0;
@@ -106,73 +116,14 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* model */
-const ATOM_SIZE = 2;
-const TAIL_WIDTH = 1.2;
-const MIN_BLUE = 2;
-const MARKET_HEIGHT = 160;
-
-const COLOR_BLUE = "#2F6BFF";
-const COLOR_GREEN = "#2DBE60";
-const COLOR_BLACK = "#000";
-const COLOR_RED = "#D10000";
-
+/* atoms — mock, will be replaced by real data */
 const atoms = [
   { hold: 40,  dir: -1 },
-  { hold: 90,  dir: 1  },
-  { liquid: true },
-  { hold: 120, dir: 1  },
+  { hold: 90,  dir:  1 },
+  { liquid: true, dir: 1 },
+  { hold: 120, dir: 1 },
   { hold: 20,  dir: -1 }
 ];
-
-function drawLiquidation(x, y) {
-  ctx.strokeStyle = COLOR_RED;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(x - 5, y - 5);
-  ctx.lineTo(x + 5, y + 5);
-  ctx.moveTo(x + 5, y - 5);
-  ctx.lineTo(x - 5, y + 5);
-  ctx.stroke();
-}
-
-function drawAtom(x, y, a) {
-  const top = y - ATOM_SIZE / 2;
-  const bottom = y + ATOM_SIZE / 2;
-
-  ctx.lineWidth = TAIL_WIDTH;
-
-  ctx.strokeStyle = COLOR_GREEN;
-  ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
-  ctx.lineTo(
-    x + ATOM_SIZE / 2,
-    a.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
-  );
-  ctx.stroke();
-
-  if (!a.liquid) {
-    const blueLen = Math.max(a.hold, MIN_BLUE);
-    ctx.strokeStyle = COLOR_BLUE;
-    ctx.beginPath();
-    ctx.moveTo(x - ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
-    ctx.lineTo(
-      x - ATOM_SIZE / 2,
-      a.dir < 0 ? bottom + blueLen : top - blueLen
-    );
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = COLOR_BLACK;
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
-
-  if (a.liquid) drawLiquidation(x, y);
-}
 
 function drawTime() {
   if (touchX === null) return;
@@ -193,10 +144,10 @@ function render() {
 
   const baseY = H * 0.55;
   const gap = 16;
-  let startX = W / 2 - (atoms.length - 1) * gap / 2;
+  const startX = W / 2 - (atoms.length - 1) * gap / 2;
 
   for (let i = 0; i < atoms.length; i++) {
-    drawAtom(startX + i * gap, baseY, atoms[i]);
+    drawAtom(ctx, startX + i * gap, baseY, atoms[i]);
   }
 
   drawTime();
