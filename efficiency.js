@@ -1,42 +1,29 @@
-// efficiency.js — Efficiency Layer V2 (stable, locked)
+// efficiency.js — Efficiency Layer V3 (final, stable)
 
-// ---- CONFIG ----
-const CV_THRESHOLD = 0.55;        // main sensitivity
-const CONFIRM_RATIO = 0.9;        // second-step confirmation
-const MIN_TOTAL_EXITS = 7;        // hard minimum
+// ----- CONFIG -----
+const MIN_EXITS = 7;
+const WINDOW = 6;
+const CV_THRESHOLD = 0.6;
 
-// adaptive window bounds
-const WINDOW_MIN = 5;
-const WINDOW_MAX = 9;
-
-// ---- HELPERS ----
-function mean(arr) {
+// ----- MATH -----
+function mean(a) {
   let s = 0;
-  for (let i = 0; i < arr.length; i++) s += arr[i];
-  return s / arr.length;
+  for (let i = 0; i < a.length; i++) s += a[i];
+  return s / a.length;
 }
 
-function std(arr, mu) {
+function std(a, m) {
   let v = 0;
-  for (let i = 0; i < arr.length; i++) {
-    const d = arr[i] - mu;
+  for (let i = 0; i < a.length; i++) {
+    const d = a[i] - m;
     v += d * d;
   }
-  return Math.sqrt(v / arr.length);
+  return Math.sqrt(v / a.length);
 }
 
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function adaptiveWindowSize(totalExits) {
-  const n = Math.round(Math.log2(totalExits) + 3);
-  return clamp(n, WINDOW_MIN, WINDOW_MAX);
-}
-
-// ---- CORE ----
+// ----- CORE -----
 export function computeEfficiency(exitTimes) {
-  if (!exitTimes || exitTimes.length < MIN_TOTAL_EXITS) {
+  if (!exitTimes || exitTimes.length < MIN_EXITS) {
     return { limitTime: null };
   }
 
@@ -45,59 +32,32 @@ export function computeEfficiency(exitTimes) {
     deltas.push(exitTimes[i] - exitTimes[i - 1]);
   }
 
-  let limitTime = null;
+  for (let i = WINDOW - 1; i < deltas.length; i++) {
+    const w = deltas.slice(i - WINDOW + 1, i + 1);
+    const mu = mean(w);
+    if (mu <= 0) continue;
 
-  for (let i = 0; i < deltas.length - 1; i++) {
-    if (limitTime !== null) break;
-
-    const totalExits = i + 2;
-    const N = adaptiveWindowSize(totalExits);
-
-    if (totalExits < Math.max(N + 2, MIN_TOTAL_EXITS)) continue;
-    if (i < N - 1) continue;
-
-    const w1 = deltas.slice(i - N + 1, i + 1);
-    const mu1 = mean(w1);
-    if (mu1 <= 0) continue;
-
-    const cv1 = std(w1, mu1) / mu1;
-    if (cv1 <= CV_THRESHOLD) continue;
-
-    const w2 = deltas.slice(i - N + 2, i + 2);
-    const mu2 = mean(w2);
-    if (mu2 <= 0) continue;
-
-    const cv2 = std(w2, mu2) / mu2;
-    if (cv2 <= CV_THRESHOLD * CONFIRM_RATIO) continue;
-
-    limitTime = exitTimes[i + 1];
+    const cv = std(w, mu) / mu;
+    if (cv > CV_THRESHOLD) {
+      return { limitTime: exitTimes[i + 1] };
+    }
   }
 
-  return { limitTime };
+  return { limitTime: null };
 }
 
-// ---- DRAWING ----
+// ----- DRAW -----
 export function drawEfficiencyLayer(ctx, opts) {
-  const {
-    dayStart,
-    dayEnd,
-    limitTime,
-    width,
-    height,
-    barHeight = 6
-  } = opts;
-
+  const { dayStart, dayEnd, limitTime, width, height, barHeight = 6 } = opts;
   const y = height - barHeight;
 
   function timeToX(t) {
-    const span = dayEnd - dayStart;
-    if (span <= 0) return 0;
-    return ((t - dayStart) / span) * width;
+    return ((t - dayStart) / (dayEnd - dayStart)) * width;
   }
 
   ctx.save();
 
-  // no limit -> full green, nothing else
+  // no break -> full green
   if (!limitTime) {
     ctx.fillStyle = "#2DBE60";
     ctx.fillRect(0, y, width, barHeight);
@@ -105,23 +65,23 @@ export function drawEfficiencyLayer(ctx, opts) {
     return;
   }
 
-  const xLimit = timeToX(limitTime);
+  const x = timeToX(limitTime);
 
   // green before
   ctx.fillStyle = "#2DBE60";
-  ctx.fillRect(0, y, xLimit, barHeight);
+  ctx.fillRect(0, y, x, barHeight);
 
-  // red vertical line (full screen)
+  // red vertical line (FULL SCREEN)
   ctx.strokeStyle = "#D10000";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(xLimit + 0.5, 0);
-  ctx.lineTo(xLimit + 0.5, height);
+  ctx.moveTo(x + 0.5, 0);
+  ctx.lineTo(x + 0.5, height);
   ctx.stroke();
 
   // grey after
   ctx.fillStyle = "#B0B0B0";
-  ctx.fillRect(xLimit, y, width - xLimit, barHeight);
+  ctx.fillRect(x, y, width - x, barHeight);
 
   ctx.restore();
 }
