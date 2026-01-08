@@ -42,15 +42,6 @@ canvas { display: block; }
   opacity: 0;
   pointer-events: none;
 }
-
-#eff {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 8px;
-  background: #2DBE60;
-}
 </style>
 </head>
 <body>
@@ -59,14 +50,12 @@ canvas { display: block; }
 <div id="back">Back</div>
 <div id="time"></div>
 <div id="date"></div>
-<div id="eff"></div>
 
 <script>
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
-const effEl = document.getElementById("eff");
 
 const now = new Date();
 dateEl.textContent = now.toLocaleDateString("en-US", {
@@ -76,8 +65,7 @@ dateEl.textContent = now.toLocaleDateString("en-US", {
   year: "numeric"
 });
 
-let W = 0;
-let H = 0;
+let W = 0, H = 0;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -95,20 +83,17 @@ resize();
 /* time interaction */
 let touchX = null;
 
-canvas.addEventListener("pointerdown", e => {
-  touchX = e.clientX;
-});
+canvas.addEventListener("pointerdown", e => touchX = e.clientX);
 canvas.addEventListener("pointermove", e => {
   if (touchX !== null) touchX = e.clientX;
 });
-canvas.addEventListener("pointerup", () => {
+canvas.addEventListener("pointerup", resetTime);
+canvas.addEventListener("pointerleave", resetTime);
+
+function resetTime() {
   touchX = null;
   timeEl.style.opacity = 0;
-});
-canvas.addEventListener("pointerleave", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
+}
 
 function xToTime(x) {
   const minutes = Math.round((x / W) * 1440);
@@ -120,26 +105,28 @@ function xToTime(x) {
 /* constants */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
-const MIN_BLUE = 2;
 const MARKET_HEIGHT = 160;
-
-const BEHAVIOR_SCALE = 40;
+const MIN_BLUE = 2;
 
 const COLOR_BLUE = "#2F6BFF";
 const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
+const COLOR_BEHAVIOR = "rgba(0,0,0,0.35)";
 
-/* demo data */
+/* data */
 const atoms = [
-  { hold: 40, dir: 1, exit: 60 },
-  { hold: 80, dir: 1, exit: 120 },
-  { liquid: true, exit: 180 },
-  { hold: 30, dir: -1, exit: 260 },
-  { hold: 100, dir: -1, exit: 340 }
+  { exit: 100, hold: 40, market: 120, dir: -1 },
+  { exit: 240, hold: 90, market: 140, dir: 1  },
+  { exit: 300, liquid: true },
+  { exit: 360, hold: 20, market: 100, dir: -1 },
+  { exit: 480, hold: 60, market: 130, dir: 1  }
 ];
 
-/* liquidation */
+/* efficiency limit */
+const limitIndex = atoms.findIndex(a => a.liquid);
+
+/* draw */
 function drawLiquidation(x, y) {
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
@@ -151,43 +138,27 @@ function drawLiquidation(x, y) {
   ctx.stroke();
 }
 
-/* atom */
-function drawAtom(x, y, a, faded=false) {
+function drawAtom(x, y, a, faded) {
   ctx.globalAlpha = faded ? 0.25 : 1;
-
-  const top = y - ATOM_SIZE / 2;
-  const bottom = y + ATOM_SIZE / 2;
 
   ctx.lineWidth = TAIL_WIDTH;
 
-  ctx.strokeStyle = COLOR_GREEN;
-  ctx.beginPath();
-  ctx.moveTo(x + ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
-  ctx.lineTo(
-    x + ATOM_SIZE / 2,
-    a.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT
-  );
-  ctx.stroke();
-
   if (!a.liquid) {
-    const blueLen = Math.max(a.hold, MIN_BLUE);
+    ctx.strokeStyle = COLOR_GREEN;
+    ctx.beginPath();
+    ctx.moveTo(x + ATOM_SIZE/2, y);
+    ctx.lineTo(x + ATOM_SIZE/2, y - a.market * a.dir);
+    ctx.stroke();
+
     ctx.strokeStyle = COLOR_BLUE;
     ctx.beginPath();
-    ctx.moveTo(x - ATOM_SIZE / 2, a.dir < 0 ? bottom : top);
-    ctx.lineTo(
-      x - ATOM_SIZE / 2,
-      a.dir < 0 ? bottom + blueLen : top - blueLen
-    );
+    ctx.moveTo(x - ATOM_SIZE/2, y);
+    ctx.lineTo(x - ATOM_SIZE/2, y - Math.max(a.hold, MIN_BLUE) * a.dir);
     ctx.stroke();
   }
 
   ctx.fillStyle = COLOR_BLACK;
-  ctx.fillRect(
-    x - ATOM_SIZE / 2,
-    y - ATOM_SIZE / 2,
-    ATOM_SIZE,
-    ATOM_SIZE
-  );
+  ctx.fillRect(x - ATOM_SIZE/2, y - ATOM_SIZE/2, ATOM_SIZE, ATOM_SIZE);
 
   if (a.liquid) drawLiquidation(x, y);
 
@@ -195,80 +166,74 @@ function drawAtom(x, y, a, faded=false) {
 }
 
 /* behavior line */
-let behavior = [];
-let limitIndex = null;
-
-function computeBehavior() {
-  behavior = [];
-  let acc = 0;
-
-  for (let i = 0; i < atoms.length; i++) {
-    if (atoms[i].liquid && limitIndex === null) {
-      limitIndex = i;
-      effEl.style.background =
-        "linear-gradient(to right,#2DBE60 " +
-        (i/atoms.length*100) +
-        "%,#D0D0D0 0%)";
-    }
-
-    const hold = atoms[i].hold || 0;
-    const market = MARKET_HEIGHT;
-    const delta = hold - market;
-
-    acc = acc * 0.8 + delta * 0.2;
-    behavior.push(acc);
-  }
-}
-
-computeBehavior();
-
 function drawBehavior(xs, baseY) {
-  ctx.strokeStyle = "rgba(0,0,0,0.4)";
+  let value = 0;
+  ctx.strokeStyle = COLOR_BEHAVIOR;
   ctx.lineWidth = 1;
   ctx.beginPath();
 
-  for (let i = 0; i < behavior.length; i++) {
-    if (limitIndex !== null && i > limitIndex) break;
-    const x = xs[i];
-    const y = baseY - behavior[i] * BEHAVIOR_SCALE;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  for (let i = 0; i < limitIndex; i++) {
+    const a = atoms[i];
+    const delta = a.hold - a.market;
+    value += Math.max(-20, Math.min(20, delta * 0.05));
+    const y = baseY - value;
+    if (i === 0) ctx.moveTo(xs[i], y);
+    else ctx.lineTo(xs[i], y);
   }
+
   ctx.stroke();
 }
 
-function drawTime() {
-  if (touchX === null) return;
+/* efficiency bar */
+function drawEfficiencyBar(xs) {
+  const y = H - 4;
+  ctx.lineWidth = 4;
 
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
-  ctx.moveTo(touchX, 0);
-  ctx.lineTo(touchX, H);
+  ctx.moveTo(0, y);
+  ctx.lineTo(xs[limitIndex], y);
   ctx.stroke();
 
-  timeEl.textContent = xToTime(touchX);
-  timeEl.style.opacity = 1;
+  ctx.strokeStyle = "#D10000";
+  ctx.beginPath();
+  ctx.moveTo(xs[limitIndex], y - 6);
+  ctx.lineTo(xs[limitIndex], y + 6);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#bbb";
+  ctx.beginPath();
+  ctx.moveTo(xs[limitIndex], y);
+  ctx.lineTo(W, y);
+  ctx.stroke();
 }
 
+/* render */
 function render() {
   ctx.clearRect(0, 0, W, H);
 
   const baseY = H * 0.55;
-  const gap = 28;
-  let startX = W / 2 - (atoms.length - 1) * gap / 2;
+  const xs = atoms.map(a => (a.exit / 1440) * W);
 
-  const xs = [];
+  drawBehavior(xs, baseY);
 
   for (let i = 0; i < atoms.length; i++) {
-    const x = startX + i * gap;
-    xs.push(x);
-    const faded = limitIndex !== null && i > limitIndex;
-    drawAtom(x, baseY, atoms[i], faded);
+    drawAtom(xs[i], baseY, atoms[i], i > limitIndex);
   }
 
-  drawBehavior(xs, baseY - 20);
-  drawTime();
+  drawEfficiencyBar(xs);
+
+  if (touchX !== null) {
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.moveTo(touchX, 0);
+    ctx.lineTo(touchX, H);
+    ctx.stroke();
+
+    timeEl.textContent = xToTime(touchX);
+    timeEl.style.opacity = 1;
+  }
+
   requestAnimationFrame(render);
 }
 
