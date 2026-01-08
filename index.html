@@ -31,24 +31,12 @@ canvas { display: block; }
   font: 12px system-ui, sans-serif;
   color: rgba(0,0,0,0.45);
 }
-
-#time {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.9);
-  opacity: 0;
-  pointer-events: none;
-}
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
 <div id="back">Back</div>
-<div id="time"></div>
 <div id="date"></div>
 
 <script type="module">
@@ -56,19 +44,10 @@ import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-/* date */
-const now = new Date();
-dateEl.textContent = now.toLocaleDateString("en-US", {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-  year: "numeric"
-});
+dateEl.textContent = new Date().toDateString();
 
-/* resize */
 let W = 0;
 let H = 0;
 
@@ -85,30 +64,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* pointer time */
-let touchX = null;
-
-canvas.addEventListener("pointerdown", e => touchX = e.clientX);
-canvas.addEventListener("pointermove", e => {
-  if (touchX !== null) touchX = e.clientX;
-});
-canvas.addEventListener("pointerup", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-canvas.addEventListener("pointerleave", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-
-function xToTime(x) {
-  const minutes = Math.round((x / W) * 1440);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
-}
-
-/* atom config */
+/* atom constants */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
@@ -119,113 +75,70 @@ const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-/* helpers */
+/* time helper */
 function t(h,m){
   const d = new Date();
   d.setHours(h,m,0,0);
   return d.getTime();
 }
 
-/* trades
-   First 5 exits are uniform.
-   Next 5 exits break rhythm in one window (1/60/1/60/1).
-*/
+/* trades crafted ONLY to trigger efficiency */
 const trades = [
-  { entry_time: t(9, 0),  exit_time: t(9,10), liquidation:false, dir:1 },
-  { entry_time: t(9,10), exit_time: t(9,20), liquidation:false, dir:1 },
-  { entry_time: t(9,20), exit_time: t(9,30), liquidation:false, dir:1 },
-  { entry_time: t(9,30), exit_time: t(9,40), liquidation:false, dir:1 },
-  { entry_time: t(9,40), exit_time: t(9,50), liquidation:false, dir:1 },
+  { entry_time:t(9,0),  exit_time:t(9,10), liquidation:false, dir:1 },
+  { entry_time:t(9,10), exit_time:t(9,20), liquidation:false, dir:1 },
+  { entry_time:t(9,20), exit_time:t(9,30), liquidation:false, dir:1 },
+  { entry_time:t(9,30), exit_time:t(9,40), liquidation:false, dir:1 },
+  { entry_time:t(9,40), exit_time:t(9,50), liquidation:false, dir:1 },
 
-  { entry_time: t(9,50), exit_time: t(9,51), liquidation:false, dir:-1 },
-  { entry_time: t(9,51), exit_time: t(10,51), liquidation:false, dir:1 },
-  { entry_time: t(10,51), exit_time: t(10,52), liquidation:false, dir:-1 },
-  { entry_time: t(10,52), exit_time: t(11,52), liquidation:false, dir:1 },
-  { entry_time: t(11,52), exit_time: t(11,53), liquidation:false, dir:-1 }
+  { entry_time:t(9,50), exit_time:t(9,51), liquidation:false, dir:-1 },
+  { entry_time:t(9,51), exit_time:t(10,30), liquidation:false, dir:1 },
+  { entry_time:t(10,30),exit_time:t(10,31), liquidation:false, dir:-1 }
 ];
 
-/* day mapping */
 const dayStart = new Date();
 dayStart.setHours(0,0,0,0);
 const DAY_START_MS = dayStart.getTime();
 
 function timeToX(t) {
-  const span = Date.now() - DAY_START_MS;
-  if (span <= 0) return 0;
-  return ((t - DAY_START_MS) / span) * W;
+  return ((t - DAY_START_MS) / (Date.now() - DAY_START_MS)) * W;
 }
 
 /* efficiency */
-const exitTimes = trades
-  .map(tr => tr.exit_time)
-  .filter(Boolean)
-  .sort((a,b) => a - b);
-
+const exitTimes = trades.map(t=>t.exit_time);
 const efficiency = computeEfficiency(exitTimes);
 
-/* drawing */
-function drawLiquidation(x,y){
-  ctx.strokeStyle = COLOR_RED;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(x-5,y-5);
-  ctx.lineTo(x+5,y+5);
-  ctx.moveTo(x+5,y-5);
-  ctx.lineTo(x-5,y+5);
-  ctx.stroke();
-}
-
+/* atom draw (NO triple tails possible) */
 function drawAtom(x,y,t){
   const top = y - ATOM_SIZE/2;
   const bottom = y + ATOM_SIZE/2;
 
   ctx.lineWidth = TAIL_WIDTH;
 
-  /* market tail */
+  // market tail
   ctx.strokeStyle = COLOR_GREEN;
   ctx.beginPath();
   ctx.moveTo(x+ATOM_SIZE/2, t.dir<0?bottom:top);
   ctx.lineTo(x+ATOM_SIZE/2, t.dir<0?bottom+MARKET_HEIGHT:top-MARKET_HEIGHT);
   ctx.stroke();
 
-  /* hold tail */
-  if(!t.liquidation){
-    const hold = Math.max(
-      MIN_BLUE,
-      Math.min(
-        Math.round((t.exit_time - t.entry_time)/60000),
-        480
-      )
-    );
-    ctx.strokeStyle = COLOR_BLUE;
-    ctx.beginPath();
-    ctx.moveTo(x-ATOM_SIZE/2, t.dir<0?bottom:top);
-    ctx.lineTo(x-ATOM_SIZE/2, t.dir<0?bottom+hold:top-hold);
-    ctx.stroke();
-  }
+  // hold tail (exactly one)
+  const hold = Math.max(
+    MIN_BLUE,
+    Math.min(Math.round((t.exit_time - t.entry_time)/60000), 480)
+  );
+  ctx.strokeStyle = COLOR_BLUE;
+  ctx.beginPath();
+  ctx.moveTo(x-ATOM_SIZE/2, t.dir<0?bottom:top);
+  ctx.lineTo(x-ATOM_SIZE/2, t.dir<0?bottom+hold:top-hold);
+  ctx.stroke();
 
-  /* atom square */
   ctx.fillStyle = COLOR_BLACK;
   ctx.fillRect(x-ATOM_SIZE/2,y-ATOM_SIZE/2,ATOM_SIZE,ATOM_SIZE);
-
-  if(t.liquidation) drawLiquidation(x,y);
-}
-
-function drawTime(){
-  if(touchX===null) return;
-  ctx.strokeStyle="rgba(0,0,0,0.25)";
-  ctx.beginPath();
-  ctx.moveTo(touchX,0);
-  ctx.lineTo(touchX,H);
-  ctx.stroke();
-  timeEl.textContent = xToTime(touchX);
-  timeEl.style.opacity=1;
 }
 
 function render(){
   ctx.clearRect(0,0,W,H);
 
-  /* efficiency bar */
   drawEfficiencyLayer(ctx,{
     dayStart:DAY_START_MS,
     dayEnd:Date.now(),
@@ -241,13 +154,10 @@ function render(){
       efficiency.limitTime && tr.exit_time > efficiency.limitTime
         ? 0.25
         : 1;
-
-    /* atom position is exit_time */
-    drawAtom(timeToX(tr.exit_time), baseY, tr);
+    drawAtom(timeToX(tr.entry_time), baseY, tr);
   }
   ctx.globalAlpha = 1;
 
-  drawTime();
   requestAnimationFrame(render);
 }
 
