@@ -12,7 +12,7 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-canvas { display: block; }
+canvas { display: block; touch-action: none; }
 
 #date {
   position: fixed;
@@ -85,18 +85,19 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* time range */
+/* time bounds */
 const ACCOUNT_START_MS = new Date("2022-01-01T00:00:00Z").getTime();
 const NOW_MS = Date.now();
 
-let viewStart = NOW_MS - 24 * 60 * 60 * 1000;
+/* fixed window size: 1 day */
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+let viewStart = NOW_MS - WINDOW_MS;
 let viewEnd   = NOW_MS;
 
 /* time mapping */
 function timeToX(t) {
-  const span = viewEnd - viewStart;
-  if (span <= 0) return -1000;
-  return ((t - viewStart) / span) * W;
+  return ((t - viewStart) / (viewEnd - viewStart)) * W;
 }
 
 function xToTime(x) {
@@ -107,74 +108,60 @@ function xToTime(x) {
   return h + ":" + m;
 }
 
-/* wheel scroll (desktop) */
-canvas.addEventListener("wheel", e => {
-  e.preventDefault();
-  const span = viewEnd - viewStart;
-  const step = span * 0.15;
-
-  if (e.deltaY > 0) {
-    viewStart = Math.max(ACCOUNT_START_MS, viewStart - step);
-    viewEnd   = Math.max(viewStart + step, viewEnd - step);
-  } else {
-    viewStart = Math.min(viewEnd - step, viewStart + step);
-    viewEnd   = Math.min(NOW_MS, viewEnd + step);
-  }
-}, { passive:false });
-
-/* drag scroll (touch + mouse) */
-let dragX = null;
-let dragView = null;
+/* horizontal drag only */
+let dragActive = false;
+let dragStartX = 0;
+let dragViewStart = 0;
 
 canvas.addEventListener("pointerdown", e => {
-  dragX = e.clientX;
-  dragView = { start: viewStart, end: viewEnd };
+  dragActive = true;
+  dragStartX = e.clientX;
+  dragViewStart = viewStart;
 });
 
 canvas.addEventListener("pointermove", e => {
-  if (dragX === null) return;
+  if (!dragActive) return;
 
-  const dx = e.clientX - dragX;
-  const span = dragView.end - dragView.start;
-  const dt = -(dx / W) * span;
+  const dx = e.clientX - dragStartX;
+  const dt = -(dx / W) * WINDOW_MS;
 
-  viewStart = dragView.start + dt;
-  viewEnd   = dragView.end   + dt;
+  let nextStart = dragViewStart + dt;
+  let nextEnd = nextStart + WINDOW_MS;
 
-  if (viewStart < ACCOUNT_START_MS) {
-    const s = ACCOUNT_START_MS - viewStart;
-    viewStart += s;
-    viewEnd   += s;
+  if (nextStart < ACCOUNT_START_MS) {
+    nextStart = ACCOUNT_START_MS;
+    nextEnd = nextStart + WINDOW_MS;
   }
 
-  if (viewEnd > NOW_MS) {
-    const s = viewEnd - NOW_MS;
-    viewStart -= s;
-    viewEnd   -= s;
+  if (nextEnd > NOW_MS) {
+    nextEnd = NOW_MS;
+    nextStart = nextEnd - WINDOW_MS;
   }
+
+  viewStart = nextStart;
+  viewEnd = nextEnd;
 });
 
 canvas.addEventListener("pointerup", () => {
-  dragX = null;
-  dragView = null;
+  dragActive = false;
 });
 
 canvas.addEventListener("pointerleave", () => {
-  dragX = null;
-  dragView = null;
+  dragActive = false;
 });
 
-/* pointer time */
+/* time indicator */
 let touchX = null;
-canvas.addEventListener("pointerdown", e => touchX = e.clientX);
+
+canvas.addEventListener("pointerdown", e => {
+  touchX = e.clientX;
+});
+
 canvas.addEventListener("pointermove", e => {
   if (touchX !== null) touchX = e.clientX;
 });
+
 canvas.addEventListener("pointerup", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-canvas.addEventListener("pointerleave", () => {
   touchX = null;
   timeEl.style.opacity = 0;
 });
