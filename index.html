@@ -4,37 +4,171 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ENTRIXX</title>
+
 <style>
-html,body{margin:0;padding:0;background:#fff;overflow:hidden}
-canvas{display:block}
-#date{
-  position:fixed;
-  bottom:8px;
-  left:50%;
-  transform:translateX(-50%);
-  font:12px system-ui;
-  color:rgba(0,0,0,.45)
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  overflow: hidden;
 }
-#back{
-  position:fixed;
-  bottom:8px;
-  left:8px;
-  font:12px system-ui;
-  color:rgba(0,0,0,.45)
+
+canvas {
+  display: block;
+}
+
+#date {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+
+#time {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 12px system-ui, sans-serif;
+  color: rgba(0,0,0,0.9);
+  pointer-events: none;
+  opacity: 0;
 }
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
-<div id="back">Back</div>
+<div id="time"></div>
 <div id="date"></div>
 
-<script type="module" src="main.js"></script>
 <script>
-document.getElementById("date").textContent =
-  new Date().toLocaleDateString("en-US",
-  {weekday:"long",month:"short",day:"numeric",year:"numeric"});
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const timeEl = document.getElementById("time");
+const dateEl = document.getElementById("date");
+
+const now = new Date();
+dateEl.textContent = now.toLocaleDateString("en-US", {
+  weekday: "long",
+  month: "short",
+  day: "numeric",
+  year: "numeric"
+});
+
+let viewW = 0;
+let viewH = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  viewW = window.innerWidth;
+  viewH = window.innerHeight;
+
+  canvas.width = Math.round(viewW * dpr);
+  canvas.height = Math.round(viewH * dpr);
+  canvas.style.width = viewW + "px";
+  canvas.style.height = viewH + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+let pointerX = null;
+
+canvas.addEventListener("pointerdown", e => pointerX = e.clientX);
+canvas.addEventListener("pointermove", e => {
+  if (pointerX !== null) pointerX = e.clientX;
+});
+canvas.addEventListener("pointerup", () => pointerX = null);
+canvas.addEventListener("pointerleave", () => pointerX = null);
+
+function xToTime(x) {
+  const minutes = Math.round((x / viewW) * 1440);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+}
+
+/* ATOM CONSTANTS — CANON */
+const ATOM_SIZE = 4;
+const TAIL_W = 1;
+
+const MARKET_HOURS = 8;
+const PX_PER_HOUR = 22;
+const MARKET_LEN = MARKET_HOURS * PX_PER_HOUR;
+
+const HOLD_COLOR = "#2F6BFF";
+const MARKET_COLOR = "#2DBE60";
+const ATOM_COLOR = "#000";
+
+const BASE_Y = () => viewH * 0.5;
+
+/* TEST ATOMS (CANON SCALE) */
+const atoms = [
+  { x: 0.47, hold: 40 },
+  { x: 0.50, hold: 90 },
+  { x: 0.53, hold: 15 }
+];
+
+function drawAtom(atom) {
+  const x = atom.x * viewW;
+  const y = BASE_Y();
+
+  const top = y - ATOM_SIZE / 2;
+
+  ctx.lineWidth = TAIL_W;
+
+  ctx.strokeStyle = MARKET_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(x + ATOM_SIZE / 2, top);
+  ctx.lineTo(x + ATOM_SIZE / 2, top - MARKET_LEN);
+  ctx.stroke();
+
+  const holdLen = Math.max(atom.hold, 3);
+  ctx.strokeStyle = HOLD_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(x - ATOM_SIZE / 2, top);
+  ctx.lineTo(x - ATOM_SIZE / 2, top - holdLen);
+  ctx.stroke();
+
+  ctx.fillStyle = ATOM_COLOR;
+  ctx.fillRect(
+    x - ATOM_SIZE / 2,
+    y - ATOM_SIZE / 2,
+    ATOM_SIZE,
+    ATOM_SIZE
+  );
+}
+
+function drawTime() {
+  if (pointerX === null) {
+    timeEl.style.opacity = 0;
+    return;
+  }
+
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.moveTo(pointerX, 0);
+  ctx.lineTo(pointerX, viewH);
+  ctx.stroke();
+
+  timeEl.textContent = xToTime(pointerX);
+  timeEl.style.opacity = 1;
+}
+
+function render() {
+  ctx.clearRect(0, 0, viewW, viewH);
+
+  for (const a of atoms) drawAtom(a);
+
+  drawTime();
+  requestAnimationFrame(render);
+}
+
+render();
 </script>
 
 </body>
