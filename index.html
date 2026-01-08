@@ -53,6 +53,7 @@ canvas { display: block; }
 
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
+import { computeBehavior, drawBehaviorLine } from "./behavior.js";
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
@@ -85,19 +86,10 @@ resize();
 
 /* pointer time */
 let touchX = null;
-
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
-canvas.addEventListener("pointermove", e => {
-  if (touchX !== null) touchX = e.clientX;
-});
-canvas.addEventListener("pointerup", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-canvas.addEventListener("pointerleave", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
+canvas.addEventListener("pointermove", e => { if (touchX !== null) touchX = e.clientX; });
+canvas.addEventListener("pointerup", () => { touchX = null; timeEl.style.opacity = 0; });
+canvas.addEventListener("pointerleave", () => { touchX = null; timeEl.style.opacity = 0; });
 
 function xToTime(x) {
   const minutes = Math.round((x / W) * 1440);
@@ -106,7 +98,7 @@ function xToTime(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* ===== CANON ATOM ===== */
+/* ===== CANON ATOM (unchanged) ===== */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
@@ -117,13 +109,13 @@ const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 const COLOR_RED = "#D10000";
 
-/* demo trades (replace with exchange data later) */
+/* demo trades with price-based HOLD/MARKET for behavior */
 const trades = [
-  { entry_time: t(9,10), exit_time: t(9,42), liquidation: false, dir: 1 },
-  { entry_time: t(10,5), exit_time: t(10,7), liquidation: true, dir: -1 },
-  { entry_time: t(11,15), exit_time: t(11,45), liquidation: false, dir: 1 },
-  { entry_time: t(11,50), exit_time: t(12,30), liquidation: false, dir: -1 },
-  { entry_time: t(12,35), exit_time: t(12,36), liquidation: false, dir: 1 }
+  { entry_time: t(9,10), exit_time: t(9,42), liquidation: false, dir: 1, hold_price: 0.6, market_price: 0.8 },
+  { entry_time: t(10,5), exit_time: t(10,7), liquidation: true,  dir: -1, hold_price: 0.0, market_price: 0.8 },
+  { entry_time: t(11,15), exit_time: t(11,45), liquidation: false, dir: 1, hold_price: 0.9, market_price: 0.8 },
+  { entry_time: t(11,50), exit_time: t(12,30), liquidation: false, dir: -1, hold_price: 0.4, market_price: 0.8 },
+  { entry_time: t(12,35), exit_time: t(12,36), liquidation: false, dir: 1, hold_price: 0.1, market_price: 0.8 }
 ];
 
 function t(h,m){
@@ -143,14 +135,13 @@ function timeToX(t) {
 }
 
 /* efficiency */
-const exitTimes = trades
-  .filter(t => t.exit_time)
-  .map(t => t.exit_time)
-  .sort((a,b) => a - b);
-
+const exitTimes = trades.filter(t => t.exit_time).map(t => t.exit_time).sort((a,b)=>a-b);
 const efficiency = computeEfficiency(exitTimes);
 
-/* drawing */
+/* behavior */
+const behaviorPoints = computeBehavior(trades, efficiency.limitTime);
+
+/* draw helpers */
 function drawLiquidation(x,y){
   ctx.strokeStyle = COLOR_RED;
   ctx.lineWidth = 2.5;
@@ -177,10 +168,7 @@ function drawAtom(x,y,t){
   if(!t.liquidation){
     const hold = Math.max(
       MIN_BLUE,
-      Math.min(
-        Math.round((t.exit_time - t.entry_time)/60000),
-        480
-      )
+      Math.min(Math.round((t.exit_time - t.entry_time)/60000), 480)
     );
     ctx.strokeStyle = COLOR_BLUE;
     ctx.beginPath();
@@ -217,14 +205,15 @@ function render(){
     height:H
   });
 
-  const baseY = H*0.55;
+  // behavior line (before atoms)
+  drawBehaviorLine(ctx, behaviorPoints, timeToX, H * 0.45);
 
+  const baseY = H*0.55;
   for(const tr of trades){
     ctx.globalAlpha =
       efficiency.limitTime && tr.exit_time && tr.exit_time > efficiency.limitTime
-        ? 0.25
-        : 1;
-    drawAtom(timeToX(tr.entry_time),baseY,tr);
+        ? 0.25 : 1;
+    drawAtom(timeToX(tr.entry_time), baseY, tr);
   }
   ctx.globalAlpha = 1;
 
