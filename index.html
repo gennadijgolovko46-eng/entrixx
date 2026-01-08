@@ -54,13 +54,13 @@ canvas { display: block; }
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 
-/* ===== CANVAS ===== */
+/* canvas */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-/* ===== DATE ===== */
+/* date */
 dateEl.textContent = new Date().toLocaleDateString("en-US", {
   weekday: "long",
   month: "short",
@@ -68,7 +68,7 @@ dateEl.textContent = new Date().toLocaleDateString("en-US", {
   year: "numeric"
 });
 
-/* ===== RESIZE ===== */
+/* resize */
 let W = 0;
 let H = 0;
 
@@ -85,14 +85,14 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* ===== TIME RANGE ===== */
+/* time range */
 const ACCOUNT_START_MS = new Date("2022-01-01T00:00:00Z").getTime();
 const NOW_MS = Date.now();
 
 let viewStart = NOW_MS - 24 * 60 * 60 * 1000;
 let viewEnd   = NOW_MS;
 
-/* ===== TIME MAP ===== */
+/* time mapping */
 function timeToX(t) {
   const span = viewEnd - viewStart;
   if (span <= 0) return -1000;
@@ -107,7 +107,7 @@ function xToTime(x) {
   return h + ":" + m;
 }
 
-/* ===== SCROLL ===== */
+/* wheel scroll (desktop) */
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
   const span = viewEnd - viewStart;
@@ -122,7 +122,49 @@ canvas.addEventListener("wheel", e => {
   }
 }, { passive:false });
 
-/* ===== POINTER TIME ===== */
+/* drag scroll (touch + mouse) */
+let dragX = null;
+let dragView = null;
+
+canvas.addEventListener("pointerdown", e => {
+  dragX = e.clientX;
+  dragView = { start: viewStart, end: viewEnd };
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (dragX === null) return;
+
+  const dx = e.clientX - dragX;
+  const span = dragView.end - dragView.start;
+  const dt = -(dx / W) * span;
+
+  viewStart = dragView.start + dt;
+  viewEnd   = dragView.end   + dt;
+
+  if (viewStart < ACCOUNT_START_MS) {
+    const s = ACCOUNT_START_MS - viewStart;
+    viewStart += s;
+    viewEnd   += s;
+  }
+
+  if (viewEnd > NOW_MS) {
+    const s = viewEnd - NOW_MS;
+    viewStart -= s;
+    viewEnd   -= s;
+  }
+});
+
+canvas.addEventListener("pointerup", () => {
+  dragX = null;
+  dragView = null;
+});
+
+canvas.addEventListener("pointerleave", () => {
+  dragX = null;
+  dragView = null;
+});
+
+/* pointer time */
 let touchX = null;
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
 canvas.addEventListener("pointermove", e => {
@@ -137,14 +179,14 @@ canvas.addEventListener("pointerleave", () => {
   timeEl.style.opacity = 0;
 });
 
-/* ===== HELPERS ===== */
+/* helpers */
 function t(h,m){
   const d = new Date();
   d.setHours(h,m,0,0);
   return d.getTime();
 }
 
-/* ===== DEMO TRADES (RHYTHM BREAK GUARANTEED) ===== */
+/* demo trades */
 const trades = [
   { entry_time: t(9, 0),  exit_time: t(9,10), dir: 1 },
   { entry_time: t(9,10), exit_time: t(9,20), dir: 1 },
@@ -156,28 +198,24 @@ const trades = [
   { entry_time: t(10,30),exit_time: t(10,31),dir:-1 }
 ];
 
-/* ===== EFFICIENCY ===== */
+/* efficiency */
 const exitTimes = trades.map(t => t.exit_time).filter(Boolean).sort((a,b)=>a-b);
 const efficiency = computeEfficiency(exitTimes);
 
-/* ===== ATOM CONFIG ===== */
+/* atom config */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
 const MARKET_HEIGHT = 160;
 
-const COLOR_BLUE = "#2F6BFF";
-const COLOR_GREEN = "#2DBE60";
-const COLOR_BLACK = "#000";
-
-/* ===== DRAW ATOM ===== */
+/* draw atom */
 function drawAtom(x, y, tr) {
   const top = y - ATOM_SIZE / 2;
   const bottom = y + ATOM_SIZE / 2;
 
   ctx.lineWidth = TAIL_WIDTH;
 
-  ctx.strokeStyle = COLOR_GREEN;
+  ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + ATOM_SIZE / 2, tr.dir < 0 ? bottom : top);
   ctx.lineTo(
@@ -190,7 +228,7 @@ function drawAtom(x, y, tr) {
     MIN_BLUE,
     Math.min(Math.round((tr.exit_time - tr.entry_time) / 60000), 480)
   );
-  ctx.strokeStyle = COLOR_BLUE;
+  ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x - ATOM_SIZE / 2, tr.dir < 0 ? bottom : top);
   ctx.lineTo(
@@ -199,7 +237,7 @@ function drawAtom(x, y, tr) {
   );
   ctx.stroke();
 
-  ctx.fillStyle = COLOR_BLACK;
+  ctx.fillStyle = "#000";
   ctx.fillRect(
     x - ATOM_SIZE / 2,
     y - ATOM_SIZE / 2,
@@ -208,7 +246,7 @@ function drawAtom(x, y, tr) {
   );
 }
 
-/* ===== RENDER ===== */
+/* render */
 function render() {
   ctx.clearRect(0,0,W,H);
 
