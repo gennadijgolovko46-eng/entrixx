@@ -1,42 +1,51 @@
-// efficiency.js — Efficiency Layer V1 (stable, deterministic)
+// efficiency.js — Efficiency Layer V1 (CV based, locked)
 
-/*
-Input:
-- exits: array of exit_time (ms), sorted asc
-Output:
-- { limitTime: ms | null }
-*/
-
-const WINDOW_SIZE = 6;      // fixed
-const RATIO_LIMIT = 6;     // fixed, deterministic
+// Product constants (fixed for V1)
+const WINDOW_SIZE = 6;        // N
+const THRESHOLD = 0.6;        // CV threshold
 const MIN_EXITS = WINDOW_SIZE + 1;
 
-export function computeEfficiency(exits) {
-  if (!exits || exits.length < MIN_EXITS) {
+export function computeEfficiency(exitTimes) {
+  if (!exitTimes || exitTimes.length < MIN_EXITS) {
     return { limitTime: null };
   }
 
-  // Δt series
+  // Compute deltas Δt[i] = t[i] - t[i-1]
   const deltas = [];
-  for (let i = 1; i < exits.length; i++) {
-    deltas.push(exits[i] - exits[i - 1]);
+  for (let i = 1; i < exitTimes.length; i++) {
+    deltas.push(exitTimes[i] - exitTimes[i - 1]);
   }
 
-  // sliding window
+  // Slide window over deltas
   for (let i = WINDOW_SIZE - 1; i < deltas.length; i++) {
+    // W[i] = last N deltas
     const window = deltas.slice(i - WINDOW_SIZE + 1, i + 1);
 
-    let min = Infinity;
-    let max = 0;
-    for (let j = 0; j < window.length; j++) {
-      const v = window[j];
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
+    // mu = mean(W)
+    let sum = 0;
+    for (let k = 0; k < window.length; k++) sum += window[k];
+    const mu = sum / WINDOW_SIZE;
 
-    if (min > 0 && max / min >= RATIO_LIMIT) {
-      // one-time limit
-      return { limitTime: exits[i + 1] };
+    // Guard: invalid mean
+    if (mu <= 0) continue;
+
+    // sigma = std(W)
+    let variance = 0;
+    for (let k = 0; k < window.length; k++) {
+      const d = window[k] - mu;
+      variance += d * d;
+    }
+    variance /= WINDOW_SIZE;
+    const sigma = Math.sqrt(variance);
+
+    // CV = sigma / mu
+    const CV = sigma / mu;
+
+    // First exceed only (one-time trigger)
+    if (CV > THRESHOLD) {
+      // limitTime fixed at corresponding exit_time
+      // deltas[i] corresponds to exitTimes[i + 1]
+      return { limitTime: exitTimes[i + 1] };
     }
   }
 
@@ -54,30 +63,40 @@ export function drawEfficiencyLayer(ctx, opts) {
   } = opts;
 
   const y = height - barHeight;
-  const span = dayEnd - dayStart;
-  const timeToX = t => span > 0 ? ((t - dayStart) / span) * width : 0;
+
+  function timeToX(t) {
+    const span = dayEnd - dayStart;
+    if (span <= 0) return 0;
+    return ((t - dayStart) / span) * width;
+  }
 
   ctx.save();
 
-  // green base
-  ctx.fillStyle = "#2DBE60";
-  ctx.fillRect(0, y, width, barHeight);
-
-  if (limitTime) {
-    const x = timeToX(limitTime);
-
-    // red vertical
-    ctx.strokeStyle = "#E53935";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, y);
-    ctx.lineTo(x + 0.5, y + barHeight);
-    ctx.stroke();
-
-    // gray after
-    ctx.fillStyle = "#B0B0B0";
-    ctx.fillRect(x, y, width - x, barHeight);
+  // No limit: full green bar
+  if (!limitTime) {
+    ctx.fillStyle = "#2DBE60";
+    ctx.fillRect(0, y, width, barHeight);
+    ctx.restore();
+    return;
   }
+
+  const xLimit = timeToX(limitTime);
+
+  // Green before limit
+  ctx.fillStyle = "#2DBE60";
+  ctx.fillRect(0, y, xLimit, barHeight);
+
+  // Red vertical marker (limit)
+  ctx.strokeStyle = "#E53935";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(xLimit + 0.5, y);
+  ctx.lineTo(xLimit + 0.5, y + barHeight);
+  ctx.stroke();
+
+  // Grey after limit
+  ctx.fillStyle = "#B0B0B0";
+  ctx.fillRect(xLimit, y, width - xLimit, barHeight);
 
   ctx.restore();
 }
