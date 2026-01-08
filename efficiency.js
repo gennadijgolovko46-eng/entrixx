@@ -1,4 +1,4 @@
-// efficiency.js — Efficiency Layer V1
+// efficiency.js — Efficiency Layer V1 (locked)
 
 const WINDOW_SIZE = 6;
 const THRESHOLD = 3.5e10;
