@@ -55,7 +55,7 @@ canvas { display: block; touch-action: none; }
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
 
-/* ===== canvas ===== */
+/* canvas */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -75,7 +75,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* ===== time ===== */
+/* time */
 const DAY_MS = 86400000;
 const now = new Date();
 const todayUTC = Date.UTC(
@@ -86,133 +86,139 @@ const todayUTC = Date.UTC(
 let currentDayUTC = todayUTC;
 
 function updateDate() {
-  const d = new Date(currentDayUTC);
-  dateEl.textContent = d.toUTCString().slice(0,16);
+  dateEl.textContent = new Date(currentDayUTC)
+    .toUTCString()
+    .slice(0, 16);
 }
 updateDate();
 
-/* ===== pointer time ===== */
-let touchX = null;
-canvas.addEventListener("pointerdown", e => touchX = e.clientX);
-canvas.addEventListener("pointermove", e => { if (touchX!==null) touchX=e.clientX; });
-canvas.addEventListener("pointerup", () => { touchX=null; timeEl.style.opacity=0; });
-canvas.addEventListener("pointerleave", () => { touchX=null; timeEl.style.opacity=0; });
+/* swipe paging */
+let startX = null;
+canvas.addEventListener("pointerdown", e => startX = e.clientX);
+canvas.addEventListener("pointerup", e => {
+  if (startX === null) return;
+  const dx = e.clientX - startX;
+  startX = null;
+  if (Math.abs(dx) < 40) return;
 
-function xToTimeUTC(x){
-  const m = Math.round((x/W)*1440);
-  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
-}
+  if (dx > 0) currentDayUTC -= DAY_MS;
+  else currentDayUTC = Math.min(todayUTC, currentDayUTC + DAY_MS);
 
-/* ===== paging ===== */
-let startX=null;
-canvas.addEventListener("pointerdown",e=>startX=e.clientX);
-canvas.addEventListener("pointerup",e=>{
-  if(startX===null)return;
-  const dx=e.clientX-startX;
-  startX=null;
-  if(Math.abs(dx)<40)return;
-  currentDayUTC += dx>0 ? -DAY_MS : DAY_MS;
-  currentDayUTC = Math.min(todayUTC,currentDayUTC);
   updateDate();
 });
 
-/* ===== atoms ===== */
-const ATOM_SIZE=2;
-const TAIL_WIDTH=1.2;
-const MIN_BLUE=2;
-const MARKET_HEIGHT=160;
+/* pointer time */
+let touchX = null;
+canvas.addEventListener("pointerdown", e => touchX = e.clientX);
+canvas.addEventListener("pointermove", e => {
+  if (touchX !== null) touchX = e.clientX;
+});
+canvas.addEventListener("pointerup", () => {
+  touchX = null;
+  timeEl.style.opacity = 0;
+});
 
-const COLOR_BLUE="#2F6BFF";
-const COLOR_GREEN="#2DBE60";
-const COLOR_BLACK="#000";
+function xToTimeUTC(x) {
+  const m = Math.round((x / W) * 1440);
+  return String(Math.floor(m / 60)).padStart(2,"0") + ":" +
+         String(m % 60).padStart(2,"0");
+}
 
-function tUTC(h,m){ return currentDayUTC+(h*60+m)*60000; }
+/* atoms */
+const MARKET_HEIGHT = 160;
+const COLOR_BLUE = "#2F6BFF";
+const COLOR_GREEN = "#2DBE60";
 
-const trades=[
-  {entry_time:tUTC(9,0),exit_time:tUTC(9,10),dir:1},
-  {entry_time:tUTC(9,10),exit_time:tUTC(9,20),dir:1},
-  {entry_time:tUTC(9,20),exit_time:tUTC(9,30),dir:1},
-  {entry_time:tUTC(9,30),exit_time:tUTC(9,40),dir:1},
-  {entry_time:tUTC(9,40),exit_time:tUTC(9,50),dir:1},
-  {entry_time:tUTC(9,50),exit_time:tUTC(9,51),dir:-1},
-  {entry_time:tUTC(9,51),exit_time:tUTC(10,30),dir:1},
-  {entry_time:tUTC(10,30),exit_time:tUTC(10,31),dir:-1}
+function tUTC(h,m) {
+  return currentDayUTC + (h * 60 + m) * 60000;
+}
+
+const trades = [
+  { entry: tUTC(9,0),  exit: tUTC(9,10), dir: 1 },
+  { entry: tUTC(9,10), exit: tUTC(9,20), dir: 1 },
+  { entry: tUTC(9,20), exit: tUTC(9,30), dir: 1 },
+  { entry: tUTC(9,30), exit: tUTC(9,40), dir: 1 },
+  { entry: tUTC(9,40), exit: tUTC(9,50), dir: 1 },
+  { entry: tUTC(9,50), exit: tUTC(9,51), dir: -1 },
+  { entry: tUTC(9,51), exit: tUTC(10,30), dir: 1 },
+  { entry: tUTC(10,30), exit: tUTC(10,31), dir: -1 }
 ];
 
-const exitTimes=trades.map(t=>t.exit_time).sort((a,b)=>a-b);
-const efficiency=computeEfficiency(exitTimes);
+function timeToX(t) {
+  return ((t - currentDayUTC) / DAY_MS) * W;
+}
 
-/* ===== behavior value ===== */
-let behaviorValue=0;
-let behaviorFrozen=false;
-for(const t of trades){
-  if(efficiency.limitTime && t.exit_time>efficiency.limitTime){
-    behaviorFrozen=true;
+function drawAtom(x,y,t) {
+  ctx.lineWidth = 1.2;
+
+  ctx.strokeStyle = COLOR_GREEN;
+  ctx.beginPath();
+  ctx.moveTo(x+1, y);
+  ctx.lineTo(x+1, y - t.dir * MARKET_HEIGHT);
+  ctx.stroke();
+
+  const hold = Math.max(2, (t.exit - t.entry) / 60000);
+  ctx.strokeStyle = COLOR_BLUE;
+  ctx.beginPath();
+  ctx.moveTo(x-1, y);
+  ctx.lineTo(x-1, y - t.dir * hold);
+  ctx.stroke();
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x-1, y-1, 2, 2);
+}
+
+/* efficiency */
+const exitTimes = trades.map(t=>t.exit).sort((a,b)=>a-b);
+const efficiency = computeEfficiency(exitTimes);
+
+/* behavior value */
+let B = 0;
+let frozen = false;
+for (const t of trades) {
+  if (efficiency.limitTime && t.exit > efficiency.limitTime) {
+    frozen = true;
     break;
   }
-  const hold=(t.exit_time-t.entry_time)/60000;
-  const delta=hold-MARKET_HEIGHT;
-  behaviorValue+=Math.max(-1,Math.min(1,delta));
+  const delta = ((t.exit - t.entry) / 60000) - MARKET_HEIGHT;
+  B += Math.max(-1, Math.min(1, delta));
 }
-const behaviorAngle=behaviorValue/12;
+const behaviorValue = B / 12;
 
-/* ===== draw helpers ===== */
-function timeToX(t){ return ((t-currentDayUTC)/DAY_MS)*W; }
-
-function drawAtom(x,y,t){
-  const top=y-1,bottom=y+1;
-  ctx.lineWidth=TAIL_WIDTH;
-
-  ctx.strokeStyle=COLOR_GREEN;
-  ctx.beginPath();
-  ctx.moveTo(x+1,t.dir<0?bottom:top);
-  ctx.lineTo(x+1,t.dir<0?bottom+MARKET_HEIGHT:top-MARKET_HEIGHT);
-  ctx.stroke();
-
-  const hold=Math.max(MIN_BLUE,Math.round((t.exit_time-t.entry_time)/60000));
-  ctx.strokeStyle=COLOR_BLUE;
-  ctx.beginPath();
-  ctx.moveTo(x-1,t.dir<0?bottom:top);
-  ctx.lineTo(x-1,t.dir<0?bottom+hold:top-hold);
-  ctx.stroke();
-
-  ctx.fillStyle=COLOR_BLACK;
-  ctx.fillRect(x-1,y-1,2,2);
-}
-
-function drawTimeLine(){
-  if(touchX===null)return;
-  ctx.strokeStyle="rgba(0,0,0,0.25)";
-  ctx.beginPath();
-  ctx.moveTo(touchX,0);
-  ctx.lineTo(touchX,H);
-  ctx.stroke();
-  timeEl.textContent=xToTimeUTC(touchX);
-  timeEl.style.opacity=1;
-}
-
-/* ===== render ===== */
-function render(){
+/* render */
+function render() {
   ctx.clearRect(0,0,W,H);
 
   drawEfficiencyLayer(ctx,{
-    dayStart:currentDayUTC,
-    dayEnd:currentDayUTC+DAY_MS,
-    limitTime:efficiency.limitTime,
-    width:W,
-    height:H
+    dayStart: currentDayUTC,
+    dayEnd: currentDayUTC + DAY_MS,
+    limitTime: efficiency.limitTime,
+    width: W,
+    height: H
   });
 
-  const baseY=H*0.55;
-  for(const t of trades) drawAtom(timeToX(t.entry_time),baseY,t);
+  const baseY = H * 0.55;
+  for (const t of trades) {
+    drawAtom(timeToX(t.entry), baseY, t);
+  }
 
   drawBehaviorArrow(ctx,{
-    angle:behaviorAngle,
-    frozen:behaviorFrozen,
-    height:H
+    width: W,
+    height: H,
+    value: behaviorValue,
+    frozen
   });
 
-  drawTimeLine();
+  if (touchX !== null) {
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.moveTo(touchX,0);
+    ctx.lineTo(touchX,H);
+    ctx.stroke();
+    timeEl.textContent = xToTimeUTC(touchX);
+    timeEl.style.opacity = 1;
+  }
+
   requestAnimationFrame(render);
 }
 render();
