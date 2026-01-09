@@ -1,48 +1,34 @@
-// behavior.js — Behavior Line V1 (fixed)
-
-const CLAMP = 1;
-
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-export function computeBehavior(trades, limitTime) {
-  let acc = 0;
-  const points = [];
-
-  for (let i = 0; i < trades.length; i++) {
-    const t = trades[i];
-    if (!t.exit_time) continue;
-    if (limitTime && t.exit_time > limitTime) break;
-
-    const delta = (t.hold_price ?? 0) - (t.market_price ?? 0);
-    const smoothed = clamp(delta, -CLAMP, CLAMP);
-
-    acc += smoothed;
-    points.push({
-      time: t.exit_time,
-      value: acc
-    });
-  }
-
-  return points;
-}
-
-export function drawBehaviorLine(ctx, points, timeToX, baseY) {
-  if (!points || points.length < 2) return;
+export function drawBehaviorArrow(ctx,{angle,frozen,height}){
+  const x=28;
+  const y=height*0.5;
+  const len=22;
+  const maxA=Math.PI/4;
+  const a=Math.max(-maxA,Math.min(maxA,angle));
 
   ctx.save();
-  ctx.strokeStyle = "rgba(0,0,0,0.35)";
-  ctx.lineWidth = 1;
+  ctx.translate(x,y);
+  ctx.rotate(a);
+
+  ctx.strokeStyle=frozen?"rgba(0,0,0,0.25)":"rgba(0,0,0,0.35)";
+  ctx.lineWidth=2;
+  ctx.lineCap="round";
+
   ctx.beginPath();
-
-  for (let i = 0; i < points.length; i++) {
-    const x = timeToX(points[i].time);
-    const y = baseY - points[i].value; // БЕЗ SCALE — ЖИВАЯ ЛИНИЯ
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-
+  ctx.moveTo(0,0);
+  ctx.lineTo(len,0);
   ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(len,0);
+  ctx.lineTo(len-6,-3);
+  ctx.moveTo(len,0);
+  ctx.lineTo(len-6,3);
+  ctx.stroke();
+
   ctx.restore();
+
+  ctx.fillStyle=frozen?"rgba(0,0,0,0.25)":"rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.arc(x,y,2.5,0,Math.PI*2);
+  ctx.fill();
 }
