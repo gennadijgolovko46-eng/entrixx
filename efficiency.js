@@ -1,27 +1,9 @@
-// efficiency.js — Efficiency Layer V3 (final, stable)
+// efficiency.js — Efficiency Layer FINAL
 
-// ----- CONFIG -----
-const MIN_EXITS = 7;
-const WINDOW = 6;
-const CV_THRESHOLD = 0.6;
+const WINDOW_SIZE = 6;
+const THRESHOLD_CV = 0.45; // coefficient of variation
+const MIN_EXITS = WINDOW_SIZE + 1;
 
-// ----- MATH -----
-function mean(a) {
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i];
-  return s / a.length;
-}
-
-function std(a, m) {
-  let v = 0;
-  for (let i = 0; i < a.length; i++) {
-    const d = a[i] - m;
-    v += d * d;
-  }
-  return Math.sqrt(v / a.length);
-}
-
-// ----- CORE -----
 export function computeEfficiency(exitTimes) {
   if (!exitTimes || exitTimes.length < MIN_EXITS) {
     return { limitTime: null };
@@ -32,32 +14,57 @@ export function computeEfficiency(exitTimes) {
     deltas.push(exitTimes[i] - exitTimes[i - 1]);
   }
 
-  for (let i = WINDOW - 1; i < deltas.length; i++) {
-    const w = deltas.slice(i - WINDOW + 1, i + 1);
-    const mu = mean(w);
-    if (mu <= 0) continue;
+  for (let i = WINDOW_SIZE - 1; i < deltas.length; i++) {
+    const window = deltas.slice(i - WINDOW_SIZE + 1, i + 1);
 
-    const cv = std(w, mu) / mu;
-    if (cv > CV_THRESHOLD) {
-      return { limitTime: exitTimes[i + 1] };
+    const mean =
+      window.reduce((s, v) => s + v, 0) / window.length;
+
+    if (mean <= 0) continue;
+
+    let variance = 0;
+    for (let j = 0; j < window.length; j++) {
+      const d = window[j] - mean;
+      variance += d * d;
+    }
+    variance /= window.length;
+
+    const sigma = Math.sqrt(variance);
+    const cv = sigma / mean;
+
+    if (cv > THRESHOLD_CV) {
+      // IMPORTANT:
+      // limitTime is AFTER the atom, not on it
+      const offset = mean;
+      return {
+        limitTime: exitTimes[i + 1] + offset
+      };
     }
   }
 
   return { limitTime: null };
 }
 
-// ----- DRAW -----
 export function drawEfficiencyLayer(ctx, opts) {
-  const { dayStart, dayEnd, limitTime, width, height, barHeight = 6 } = opts;
+  const {
+    dayStart,
+    dayEnd,
+    limitTime,
+    width,
+    height,
+    barHeight = 6
+  } = opts;
+
   const y = height - barHeight;
 
   function timeToX(t) {
-    return ((t - dayStart) / (dayEnd - dayStart)) * width;
+    const span = dayEnd - dayStart;
+    if (span <= 0) return 0;
+    return ((t - dayStart) / span) * width;
   }
 
   ctx.save();
 
-  // no break -> full green
   if (!limitTime) {
     ctx.fillStyle = "#2DBE60";
     ctx.fillRect(0, y, width, barHeight);
@@ -65,23 +72,23 @@ export function drawEfficiencyLayer(ctx, opts) {
     return;
   }
 
-  const x = timeToX(limitTime);
+  const xLimit = timeToX(limitTime);
 
-  // green before
+  // green zone
   ctx.fillStyle = "#2DBE60";
-  ctx.fillRect(0, y, x, barHeight);
+  ctx.fillRect(0, y, xLimit, barHeight);
 
   // red vertical line (FULL SCREEN)
   ctx.strokeStyle = "#D10000";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(x + 0.5, 0);
-  ctx.lineTo(x + 0.5, height);
+  ctx.moveTo(xLimit + 0.5, 0);
+  ctx.lineTo(xLimit + 0.5, height);
   ctx.stroke();
 
-  // grey after
+  // grey zone
   ctx.fillStyle = "#B0B0B0";
-  ctx.fillRect(x, y, width - x, barHeight);
+  ctx.fillRect(xLimit, y, width - xLimit, barHeight);
 
   ctx.restore();
 }
