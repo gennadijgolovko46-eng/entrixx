@@ -9,7 +9,6 @@ async function post(body) {
   return r.json();
 }
 
-// Load all fills for a Perps Account
 async function getFills(account) {
   return post({
     type: "userFills",
@@ -17,16 +16,14 @@ async function getFills(account) {
   });
 }
 
-// Convert fills → ENTRIXX trades
 function groupFills(fills) {
   const trades = [];
   const open = {};
-
   fills.sort((a,b)=>a.time-b.time);
 
   for (const f of fills) {
     const sym = f.coin;
-    const side = f.side; // "B" or "S"
+    const side = f.side;
     const px = Number(f.px);
     const t = f.time;
 
