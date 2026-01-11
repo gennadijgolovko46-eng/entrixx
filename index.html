@@ -12,25 +12,13 @@ html, body {
   background: #ffffff;
   overflow: hidden;
 }
-canvas {
-  display: block;
-  touch-action: none;
-}
+canvas { display:block; touch-action:none; }
 
 #date {
   position: fixed;
   bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.45);
-  pointer-events: none;
-}
-
-#back {
-  position: fixed;
-  bottom: 14px;
-  left: 8px;
   font: 12px system-ui, sans-serif;
   color: rgba(0,0,0,0.45);
 }
@@ -43,14 +31,12 @@ canvas {
   font: 12px system-ui, sans-serif;
   color: rgba(0,0,0,0.9);
   opacity: 0;
-  pointer-events: none;
 }
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
-<div id="back">Back</div>
 <div id="time"></div>
 <div id="date"></div>
 
@@ -60,7 +46,7 @@ import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
 /* ================= WALLET ================= */
-const WALLET = "0xPUT_REAL_WALLET_HERE";
+const WALLET = "0xfae95f601f3a25ace60d19dbb929f2a5c57e3571";
 
 /* ================= CANVAS ================= */
 const canvas = document.getElementById("c");
@@ -68,16 +54,16 @@ const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
 const dateEl = document.getElementById("date");
 
-let W = 0, H = 0;
-function resize() {
+let W=0, H=0;
+function resize(){
   const dpr = window.devicePixelRatio || 1;
   W = window.innerWidth;
   H = window.innerHeight;
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
-  canvas.style.width = W + "px";
-  canvas.style.height = H + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvas.width = W*dpr;
+  canvas.height = H*dpr;
+  canvas.style.width = W+"px";
+  canvas.style.height = H+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 window.addEventListener("resize", resize);
 resize();
@@ -85,173 +71,110 @@ resize();
 /* ================= TIME ================= */
 const DAY_MS = 86400000;
 const now = new Date();
-const todayUTC = Date.UTC(
-  now.getUTCFullYear(),
-  now.getUTCMonth(),
-  now.getUTCDate()
-);
+const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 let currentDayUTC = todayUTC;
 
-function updateDate() {
+function updateDate(){
   const d = new Date(currentDayUTC);
-  dateEl.textContent = d.toUTCString().slice(0, 16);
+  dateEl.textContent = d.toUTCString().slice(0,16);
 }
 updateDate();
 
-/* ================= POINTER TIME ================= */
-let touchX = null;
+/* ================= POINTER ================= */
+let touchX=null;
+canvas.addEventListener("pointerdown",e=>touchX=e.clientX);
+canvas.addEventListener("pointermove",e=>{ if(touchX!==null) touchX=e.clientX;});
+canvas.addEventListener("pointerup",()=>{ touchX=null; timeEl.style.opacity=0;});
+canvas.addEventListener("pointerleave",()=>{ touchX=null; timeEl.style.opacity=0;});
 
-canvas.addEventListener("pointerdown", e => touchX = e.clientX);
-canvas.addEventListener("pointermove", e => {
-  if (touchX !== null) touchX = e.clientX;
-});
-canvas.addEventListener("pointerup", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-canvas.addEventListener("pointerleave", () => {
-  touchX = null;
-  timeEl.style.opacity = 0;
-});
-
-function xToTimeUTC(x) {
-  const minutes = Math.round((x / W) * 1440);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+function xToTimeUTC(x){
+  const m = Math.round((x/W)*1440);
+  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
-
-/* ================= DAY PAGING ================= */
-let startX = null;
-canvas.addEventListener("pointerdown", e => startX = e.clientX);
-canvas.addEventListener("pointerup", e => {
-  if (startX === null) return;
-  const dx = e.clientX - startX;
-  startX = null;
-  if (Math.abs(dx) < 40) return;
-
-  if (dx > 0) {
-    currentDayUTC -= DAY_MS;
-  } else {
-    currentDayUTC = Math.min(todayUTC, currentDayUTC + DAY_MS);
-  }
-  updateDate();
-});
-
-/* ================= ATOM CONSTANTS ================= */
-const ATOM_SIZE = 2;
-const TAIL_WIDTH = 1.2;
-const MIN_BLUE = 2;
-const MARKET_HEIGHT = 160;
-
-const COLOR_BLUE = "#2F6BFF";
-const COLOR_GREEN = "#2DBE60";
-const COLOR_BLACK = "#000";
 
 /* ================= DATA ================= */
 let trades = [];
-
-async function init() {
-  trades = await loadTradesFromHyperliquid(WALLET);
-}
-await init();
-
-/* ================= EFFICIENCY ================= */
-const exitTimes = trades
-  .map(t => t.exit_time)
-  .filter(Boolean)
-  .sort((a,b)=>a-b);
-
-const efficiency = computeEfficiency(exitTimes);
-
-/* ================= BEHAVIOR ================= */
-let B = 0;
+let efficiency = {limitTime:null};
+let arrowValue = 0;
 let frozen = false;
 
-for (const t of trades) {
-  if (efficiency.limitTime && t.exit_time > efficiency.limitTime) {
-    frozen = true;
-    break;
+async function init(){
+  trades = await loadTradesFromHyperliquid(WALLET);
+
+  const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
+  efficiency = computeEfficiency(exitTimes);
+
+  let B=0;
+  frozen=false;
+  for(const t of trades){
+    if(efficiency.limitTime && t.exit_time > efficiency.limitTime){
+      frozen=true; break;
+    }
+    const hold = (t.exit_time - t.entry_time)/60000;
+    const market = 160;
+    const delta = hold - market;
+    B += Math.max(-1,Math.min(1,delta));
   }
-  const hold = Math.abs(t.exit_price - t.entry_price);
-  const market = MARKET_HEIGHT;
-  const delta = hold - market;
-  B += Math.max(-1, Math.min(1, delta));
+  arrowValue = Math.max(-1,Math.min(1,B/12));
 }
 
-const arrowValue = Math.max(-1, Math.min(1, B / 12));
+await init();
 
 /* ================= DRAW ================= */
-function timeToX(t) {
-  return ((t - currentDayUTC) / DAY_MS) * W;
-}
+function timeToX(t){ return ((t-currentDayUTC)/DAY_MS)*W; }
 
-function drawAtom(x, y, t) {
-  const top = y - ATOM_SIZE/2;
-  const bottom = y + ATOM_SIZE/2;
+function drawAtom(x,y,t){
+  const top=y-1, bottom=y+1;
+  ctx.lineWidth=1.2;
 
-  ctx.lineWidth = TAIL_WIDTH;
-
-  ctx.strokeStyle = COLOR_GREEN;
+  ctx.strokeStyle="#2DBE60";
   ctx.beginPath();
-  ctx.moveTo(x+1, t.dir < 0 ? bottom : top);
-  ctx.lineTo(x+1, t.dir < 0 ? bottom + MARKET_HEIGHT : top - MARKET_HEIGHT);
+  ctx.moveTo(x+1, t.dir<0?bottom:top);
+  ctx.lineTo(x+1, t.dir<0?bottom+160:top-160);
   ctx.stroke();
 
-  const hold = Math.max(
-    MIN_BLUE,
-    Math.round((t.exit_time - t.entry_time) / 60000)
-  );
-
-  ctx.strokeStyle = COLOR_BLUE;
+  const hold=Math.max(2,Math.round((t.exit_time-t.entry_time)/60000));
+  ctx.strokeStyle="#2F6BFF";
   ctx.beginPath();
-  ctx.moveTo(x-1, t.dir < 0 ? bottom : top);
-  ctx.lineTo(x-1, t.dir < 0 ? bottom + hold : top - hold);
+  ctx.moveTo(x-1, t.dir<0?bottom:top);
+  ctx.lineTo(x-1, t.dir<0?bottom+hold:top-hold);
   ctx.stroke();
 
-  ctx.fillStyle = COLOR_BLACK;
-  ctx.fillRect(x-1, y-1, 2, 2);
+  ctx.fillStyle="#000";
+  ctx.fillRect(x-1,y-1,2,2);
 }
 
-function drawTimeLine() {
-  if (touchX === null) return;
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+function drawTimeLine(){
+  if(touchX===null) return;
+  ctx.strokeStyle="rgba(0,0,0,0.25)";
   ctx.beginPath();
   ctx.moveTo(touchX,0);
   ctx.lineTo(touchX,H);
   ctx.stroke();
-  timeEl.textContent = xToTimeUTC(touchX);
-  timeEl.style.opacity = 1;
+  timeEl.textContent=xToTimeUTC(touchX);
+  timeEl.style.opacity=1;
 }
 
-/* ================= RENDER ================= */
-function render() {
+/* ================= LOOP ================= */
+function render(){
   ctx.clearRect(0,0,W,H);
 
   drawEfficiencyLayer(ctx,{
     dayStart: currentDayUTC,
-    dayEnd: currentDayUTC + DAY_MS,
+    dayEnd: currentDayUTC+DAY_MS,
     limitTime: efficiency.limitTime,
-    width: W,
-    height: H
+    width:W, height:H
   });
 
-  const baseY = H * 0.55;
-  for (const t of trades) {
+  const baseY=H*0.55;
+  for(const t of trades){
     drawAtom(timeToX(t.entry_time), baseY, t);
   }
 
-  drawBehaviorArrow(ctx, {
-    value: arrowValue,
-    frozen,
-    width: W,
-    height: H
-  });
-
+  drawBehaviorArrow(ctx,{ value:arrowValue, frozen, width:W, height:H });
   drawTimeLine();
   requestAnimationFrame(render);
 }
-
 render();
 </script>
 </body>
