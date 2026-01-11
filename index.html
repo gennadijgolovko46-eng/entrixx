@@ -74,6 +74,11 @@ let currentDayUTC = 0;
 let minDayUTC = 0;
 let maxDayUTC = 0;
 
+function toUTCDay(ms){
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
 function updateDate(){
   const d = new Date(currentDayUTC);
   dateEl.textContent = d.toUTCString().slice(0,16);
@@ -130,10 +135,11 @@ async function init(){
     return;
   }
 
-  const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
+  const days = trades.map(t => toUTCDay(t.entry_time));
   minDayUTC = Math.min(...days);
   maxDayUTC = Math.max(...days);
-  currentDayUTC = maxDayUTC;
+
+  currentDayUTC = maxDayUTC; // start from last real trading day
   updateDate();
 
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
