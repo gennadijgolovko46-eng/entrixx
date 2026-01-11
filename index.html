@@ -1,36 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>ENTRIXX</title>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: #ffffff;
-  overflow: hidden;
+html,body{
+  margin:0;
+  padding:0;
+  background:#fff;
+  overflow:hidden;
 }
-canvas { display:block; touch-action:none; }
+canvas{display:block;touch-action:none;}
 
-#date {
-  position: fixed;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.45);
+#date{
+  position:fixed;
+  bottom:14px;
+  left:50%;
+  transform:translateX(-50%);
+  font:12px system-ui,sans-serif;
+  color:rgba(0,0,0,.45);
 }
 
-#time {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px system-ui, sans-serif;
-  color: rgba(0,0,0,0.9);
-  opacity: 0;
+#time{
+  position:fixed;
+  top:8px;
+  left:50%;
+  transform:translateX(-50%);
+  font:12px system-ui,sans-serif;
+  color:rgba(0,0,0,.9);
+  opacity:0;
 }
 </style>
 </head>
@@ -45,142 +45,130 @@ import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-/* ===== REAL HYPERLIQUID PERPS ACCOUNT ===== */
+/* Hyperliquid user */
 const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 
-/* ===== CANVAS ===== */
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-const timeEl = document.getElementById("time");
-const dateEl = document.getElementById("date");
+/* Canvas */
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d");
+const timeEl=document.getElementById("time");
+const dateEl=document.getElementById("date");
 
-let W=0, H=0;
+let W=0,H=0;
 function resize(){
-  const dpr = window.devicePixelRatio || 1;
-  W = window.innerWidth;
-  H = window.innerHeight;
-  canvas.width = W*dpr;
-  canvas.height = H*dpr;
-  canvas.style.width = W+"px";
-  canvas.style.height = H+"px";
+  const dpr=window.devicePixelRatio||1;
+  W=window.innerWidth;
+  H=window.innerHeight;
+  canvas.width=W*dpr;
+  canvas.height=H*dpr;
+  canvas.style.width=W+"px";
+  canvas.style.height=H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-window.addEventListener("resize", resize);
+window.addEventListener("resize",resize);
 resize();
 
-/* ===== TIME ===== */
-const DAY_MS = 86400000;
-let currentDayUTC = 0;
-let minDayUTC = 0;
-let maxDayUTC = 0;
+/* Time */
+const DAY_MS=86400000;
+let currentDay=0;
+let days=[];
 
 function updateDate(){
-  const d = new Date(currentDayUTC);
-  dateEl.textContent = d.toUTCString().slice(0,16);
+  const d=new Date(currentDay);
+  dateEl.textContent=d.toUTCString().slice(0,16);
 }
 
-/* ===== POINTER ===== */
-let touchX=null;
-let startX=null;
+/* Pointer */
+let downX=null,startX=null;
 
 canvas.addEventListener("pointerdown",e=>{
-  touchX=e.clientX;
+  downX=e.clientX;
   startX=e.clientX;
 });
-
 canvas.addEventListener("pointermove",e=>{
-  if(touchX!==null) touchX=e.clientX;
+  if(downX!==null) downX=e.clientX;
 });
-
 canvas.addEventListener("pointerup",e=>{
-  const dx = e.clientX - startX;
+  const dx=e.clientX-startX;
   if(Math.abs(dx)>40){
-    if(dx>0){
-      currentDayUTC = Math.max(minDayUTC, currentDayUTC - DAY_MS);
-    } else {
-      currentDayUTC = Math.min(maxDayUTC, currentDayUTC + DAY_MS);
-    }
+    const i=days.indexOf(currentDay);
+    if(dx>0 && i>0) currentDay=days[i-1];
+    if(dx<0 && i<days.length-1) currentDay=days[i+1];
     updateDate();
   }
-  touchX=null;
+  downX=null;
   timeEl.style.opacity=0;
 });
-
 canvas.addEventListener("pointerleave",()=>{
-  touchX=null;
+  downX=null;
   timeEl.style.opacity=0;
 });
 
-function xToTimeUTC(x){
-  const m = Math.round((x/W)*1440);
+function xToTime(x){
+  const m=Math.round((x/W)*1440);
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
 
-/* ===== DATA ===== */
-let trades = [];
-let efficiency = {limitTime:null};
-let arrowValue = 0;
-let frozen = false;
+/* Data */
+let trades=[];
+let efficiency={limitTime:null};
+let arrowValue=0;
+let frozen=false;
+
+function dayOf(t){
+  return Math.floor(t/DAY_MS)*DAY_MS;
+}
 
 async function init(){
   trades = await loadTradesFromHyperliquid(ACCOUNT);
+  if(!trades.length) return;
 
-  if (!trades.length) {
-    console.error("No trades for this account");
-    return;
-  }
+  const set=new Set();
+  for(const t of trades) set.add(dayOf(t.entry_time));
+  days=[...set].sort((a,b)=>a-b);
 
-  const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
-  minDayUTC = Math.min(...days);
-  maxDayUTC = Math.max(...days);
-
-  currentDayUTC = maxDayUTC;   // start at latest day
+  currentDay=days[days.length-1];
   updateDate();
 
-  const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
-  efficiency = computeEfficiency(exitTimes);
+  const exits=trades.map(t=>t.exit_time).sort((a,b)=>a-b);
+  efficiency=computeEfficiency(exits);
 
   let B=0;
   frozen=false;
   for(const t of trades){
-    if(efficiency.limitTime && t.exit_time > efficiency.limitTime){
-      frozen=true; break;
+    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){
+      frozen=true;
+      break;
     }
-    const hold = (t.exit_time - t.entry_time)/60000;
-    const delta = hold - 160;
-    B += Math.max(-1,Math.min(1,delta));
+    const hold=(t.exit_time-t.entry_time)/60000;
+    B+=Math.max(-1,Math.min(1,hold-160));
   }
-  arrowValue = Math.max(-1,Math.min(1,B/12));
+  arrowValue=Math.max(-1,Math.min(1,B/12));
 }
-
 await init();
 
-/* ===== FILTER ===== */
-function tradesForDay(dayUTC){
-  return trades.filter(t =>
-    t.entry_time >= dayUTC &&
-    t.entry_time < dayUTC + DAY_MS
-  );
+function tradesForDay(d){
+  return trades.filter(t=>dayOf(t.entry_time)===d);
 }
 
-/* ===== DRAW ===== */
-function timeToX(t){ return ((t-currentDayUTC)/DAY_MS)*W; }
+/* Draw */
+function timeToX(t){ return ((t-currentDay)/DAY_MS)*W; }
 
 function drawAtom(x,y,t){
-  const top=y-1, bottom=y+1;
+  const top=y-1,bottom=y+1;
   ctx.lineWidth=1.2;
 
   ctx.strokeStyle="#2DBE60";
   ctx.beginPath();
-  ctx.moveTo(x+1, t.dir<0?bottom:top);
-  ctx.lineTo(x+1, t.dir<0?bottom+160:top-160);
+  ctx.moveTo(x+1,t.dir<0?bottom:top);
+  ctx.lineTo(x+1,t.dir<0?bottom+160:top-160);
   ctx.stroke();
 
   const hold=Math.max(2,(t.exit_time-t.entry_time)/60000);
   ctx.strokeStyle="#2F6BFF";
   ctx.beginPath();
-  ctx.moveTo(x-1, t.dir<0?bottom:top);
-  ctx.lineTo(x-1, t.dir<0?bottom+hold:top-hold);
+  ctx.moveTo(x-1,t.dir<0?bottom:top);
+  ctx.lineTo(x-1,t.dir<0?bottom+hold:top-hold);
   ctx.stroke();
 
   ctx.fillStyle="#000";
@@ -188,33 +176,33 @@ function drawAtom(x,y,t){
 }
 
 function drawTimeLine(){
-  if(touchX===null) return;
-  ctx.strokeStyle="rgba(0,0,0,0.25)";
+  if(downX===null) return;
+  ctx.strokeStyle="rgba(0,0,0,.25)";
   ctx.beginPath();
-  ctx.moveTo(touchX,0);
-  ctx.lineTo(touchX,H);
+  ctx.moveTo(downX,0);
+  ctx.lineTo(downX,H);
   ctx.stroke();
-  timeEl.textContent=xToTimeUTC(touchX);
+  timeEl.textContent=xToTime(downX);
   timeEl.style.opacity=1;
 }
 
-/* ===== LOOP ===== */
 function render(){
   ctx.clearRect(0,0,W,H);
 
   drawEfficiencyLayer(ctx,{
-    dayStart: currentDayUTC,
-    dayEnd: currentDayUTC+DAY_MS,
-    limitTime: efficiency.limitTime,
-    width:W, height:H
+    dayStart:currentDay,
+    dayEnd:currentDay+DAY_MS,
+    limitTime:efficiency.limitTime,
+    width:W,
+    height:H
   });
 
   const baseY=H*0.55;
-  for(const t of tradesForDay(currentDayUTC)){
-    drawAtom(timeToX(t.entry_time), baseY, t);
+  for(const t of tradesForDay(currentDay)){
+    drawAtom(timeToX(t.entry_time),baseY,t);
   }
 
-  drawBehaviorArrow(ctx,{ value:arrowValue, frozen, width:W, height:H });
+  drawBehaviorArrow(ctx,{value:arrowValue,frozen,width:W,height:H});
   drawTimeLine();
   requestAnimationFrame(render);
 }
