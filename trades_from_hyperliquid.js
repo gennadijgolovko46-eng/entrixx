@@ -3,33 +3,27 @@ const HL = "https://api.hyperliquid.xyz/info";
 async function post(body){
   const r = await fetch(HL,{
     method:"POST",
-    headers:{"Content-Type":"application/json"},
+    headers:{ "Content-Type":"application/json" },
     body:JSON.stringify(body)
   });
   return r.json();
 }
 
-async function getAllFills(user){
-  let all = [];
-  let endTime = Date.now();
+// L1 wallet -> L2 trading account
+async function getAccount(wallet){
+  const r = await post({
+    type:"userState",
+    user:wallet
+  });
+  return r.account;
+}
 
-  while(true){
-    const res = await post({
-      type: "userFills",
-      user,
-      endTime,
-      limit: 1000
-    });
-
-    if(!res || res.length === 0) break;
-
-    all = all.concat(res);
-    endTime = res[0].time - 1;
-
-    if(res.length < 1000) break;
-  }
-
-  return all;
+// L2 account -> fills
+async function getFills(account){
+  return post({
+    type:"userFills",
+    user:account
+  });
 }
 
 function groupFills(fills){
@@ -39,15 +33,15 @@ function groupFills(fills){
   fills.sort((a,b)=>a.time-b.time);
 
   for(const f of fills){
-    const sym=f.coin;
+    const s=f.coin;
     const side=f.side;
-    const px=Number(f.px);
     const t=f.time;
+    const px=Number(f.px);
 
-    if(!open[sym]){
-      open[sym]={side,px,t};
+    if(!open[s]){
+      open[s]={side,t,px};
     }else{
-      const o=open[sym];
+      const o=open[s];
       if(o.side!==side){
         trades.push({
           entry_time:o.t,
@@ -56,14 +50,16 @@ function groupFills(fills){
           exit_price:px,
           dir:o.side==="B"?1:-1
         });
-        open[sym]=null;
+        open[s]=null;
       }
     }
   }
   return trades;
 }
 
-export async function loadTradesFromHyperliquid(user){
-  const fills = await getAllFills(user);
+export async function loadTradesFromHyperliquid(wallet){
+  const account = await getAccount(wallet);
+  if(!account) return [];
+  const fills = await getFills(account);
   return groupFills(fills);
 }
