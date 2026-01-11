@@ -45,8 +45,10 @@ import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
+/* ===== REAL HYPERLIQUID USER ADDRESS ===== */
+const USER = "0x880ac484a1743862989a441d6d867238c7aa311c";
 
+/* ===== CANVAS ===== */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -66,16 +68,15 @@ function resize(){
 window.addEventListener("resize", resize);
 resize();
 
+/* ===== TIME ===== */
 const DAY_MS = 86400000;
-
-let trades = [];
-let tradeDays = [];
-let dayIndex = 0;
 let currentDayUTC = 0;
+let tradeDays = [];   // sorted unique days
 
-let efficiency = {limitTime:null};
-let arrowValue = 0;
-let frozen = false;
+function updateDate(){
+  const d = new Date(currentDayUTC);
+  dateEl.textContent = d.toUTCString().slice(0,16);
+}
 
 /* ===== POINTER ===== */
 let touchX=null;
@@ -93,12 +94,13 @@ canvas.addEventListener("pointermove",e=>{
 canvas.addEventListener("pointerup",e=>{
   const dx = e.clientX - startX;
   if(Math.abs(dx)>40){
-    if(dx>0){
-      dayIndex = Math.max(0, dayIndex - 1);
-    } else {
-      dayIndex = Math.min(tradeDays.length-1, dayIndex + 1);
+    const idx = tradeDays.indexOf(currentDayUTC);
+    if(dx>0 && idx>0){
+      currentDayUTC = tradeDays[idx-1];
     }
-    currentDayUTC = tradeDays[dayIndex];
+    if(dx<0 && idx < tradeDays.length-1){
+      currentDayUTC = tradeDays[idx+1];
+    }
     updateDate();
   }
   touchX=null;
@@ -115,27 +117,36 @@ function xToTimeUTC(x){
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
 
-function updateDate(){
-  const d = new Date(currentDayUTC);
-  dateEl.textContent = d.toUTCString().slice(0,16);
-}
+/* ===== DATA ===== */
+let trades = [];
+let efficiency = {limitTime:null};
+let arrowValue = 0;
+let frozen = false;
 
-/* ===== INIT ===== */
 async function init(){
-  trades = await loadTradesFromHyperliquid(ACCOUNT);
-  if(!trades.length) return;
+  trades = await loadTradesFromHyperliquid(USER);
 
-  tradeDays = [...new Set(
-    trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS)
-  )].sort((a,b)=>a-b);
+  if (!trades.length) {
+    console.error("No trades for this user");
+    return;
+  }
 
-  dayIndex = tradeDays.length - 1;
-  currentDayUTC = tradeDays[dayIndex];
+  /* build list of days that actually have trades */
+  const set = new Set();
+  for(const t of trades){
+    set.add(Math.floor(t.entry_time / DAY_MS) * DAY_MS);
+  }
+  tradeDays = Array.from(set).sort((a,b)=>a-b);
+
+  /* start on last (most recent) day */
+  currentDayUTC = tradeDays[tradeDays.length-1];
   updateDate();
 
+  /* efficiency */
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exitTimes);
 
+  /* behavior arrow */
   let B=0;
   frozen=false;
   for(const t of trades){
@@ -194,6 +205,7 @@ function drawTimeLine(){
   timeEl.style.opacity=1;
 }
 
+/* ===== LOOP ===== */
 function render(){
   ctx.clearRect(0,0,W,H);
 
