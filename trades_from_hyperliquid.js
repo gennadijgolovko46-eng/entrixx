@@ -1,6 +1,4 @@
-// trades_from_hyperliquid.js
 const HL = "https://api.hyperliquid.xyz/info";
-const DAY_MS = 86400000;
 
 async function post(body) {
   const r = await fetch(HL, {
@@ -11,16 +9,7 @@ async function post(body) {
   return r.json();
 }
 
-// 1) wallet → trading account
-async function getAccount(wallet) {
-  const res = await post({
-    type: "userState",
-    user: wallet
-  });
-  return res.account; // this is 0x5b5d...c060
-}
-
-// 2) account → fills
+// Load all fills for a Perps Account
 async function getFills(account) {
   return post({
     type: "userFills",
@@ -28,7 +17,7 @@ async function getFills(account) {
   });
 }
 
-// 3) fills → ENTRIXX trades
+// Convert fills → ENTRIXX trades
 function groupFills(fills) {
   const trades = [];
   const open = {};
@@ -60,9 +49,7 @@ function groupFills(fills) {
   return trades;
 }
 
-// PUBLIC API
-export async function loadTradesFromHyperliquid(wallet) {
-  const account = await getAccount(wallet);       // FIX
-  const fills = await getFills(account);          // FIX
-  return groupFills(fills);                       // REAL TRADES
+export async function loadTradesFromHyperliquid(account) {
+  const fills = await getFills(account);
+  return groupFills(fills);
 }
