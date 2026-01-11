@@ -57,8 +57,12 @@ canvas {
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
+import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-/* ===== canvas ===== */
+/* ================= WALLET ================= */
+const WALLET = "0xPUT_REAL_WALLET_HERE";
+
+/* ================= CANVAS ================= */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -78,7 +82,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* ===== time ===== */
+/* ================= TIME ================= */
 const DAY_MS = 86400000;
 const now = new Date();
 const todayUTC = Date.UTC(
@@ -94,7 +98,7 @@ function updateDate() {
 }
 updateDate();
 
-/* ===== pointer time ===== */
+/* ================= POINTER TIME ================= */
 let touchX = null;
 
 canvas.addEventListener("pointerdown", e => touchX = e.clientX);
@@ -117,7 +121,7 @@ function xToTimeUTC(x) {
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 }
 
-/* ===== day paging ===== */
+/* ================= DAY PAGING ================= */
 let startX = null;
 canvas.addEventListener("pointerdown", e => startX = e.clientX);
 canvas.addEventListener("pointerup", e => {
@@ -134,7 +138,7 @@ canvas.addEventListener("pointerup", e => {
   updateDate();
 });
 
-/* ===== atom constants ===== */
+/* ================= ATOM CONSTANTS ================= */
 const ATOM_SIZE = 2;
 const TAIL_WIDTH = 1.2;
 const MIN_BLUE = 2;
@@ -144,27 +148,23 @@ const COLOR_BLUE = "#2F6BFF";
 const COLOR_GREEN = "#2DBE60";
 const COLOR_BLACK = "#000";
 
-/* ===== demo trades ===== */
-function tUTC(h, m) {
-  return currentDayUTC + (h * 60 + m) * 60000;
+/* ================= DATA ================= */
+let trades = [];
+
+async function init() {
+  trades = await loadTradesFromHyperliquid(WALLET);
 }
+await init();
 
-const trades = [
-  { entry_time: tUTC(9,0),  exit_time: tUTC(9,10), dir: 1 },
-  { entry_time: tUTC(9,10), exit_time: tUTC(9,20), dir: 1 },
-  { entry_time: tUTC(9,20), exit_time: tUTC(9,30), dir: 1 },
-  { entry_time: tUTC(9,30), exit_time: tUTC(9,40), dir: 1 },
-  { entry_time: tUTC(9,40), exit_time: tUTC(9,50), dir: 1 },
-  { entry_time: tUTC(9,50), exit_time: tUTC(9,51), dir: -1 },
-  { entry_time: tUTC(9,51), exit_time: tUTC(10,30), dir: 1 },
-  { entry_time: tUTC(10,30), exit_time: tUTC(10,31), dir: -1 }
-];
+/* ================= EFFICIENCY ================= */
+const exitTimes = trades
+  .map(t => t.exit_time)
+  .filter(Boolean)
+  .sort((a,b)=>a-b);
 
-/* ===== efficiency ===== */
-const exitTimes = trades.map(t => t.exit_time).sort((a,b)=>a-b);
 const efficiency = computeEfficiency(exitTimes);
 
-/* ===== behavior accumulation ===== */
+/* ================= BEHAVIOR ================= */
 let B = 0;
 let frozen = false;
 
@@ -173,7 +173,7 @@ for (const t of trades) {
     frozen = true;
     break;
   }
-  const hold = (t.exit_time - t.entry_time) / 60000;
+  const hold = Math.abs(t.exit_price - t.entry_price);
   const market = MARKET_HEIGHT;
   const delta = hold - market;
   B += Math.max(-1, Math.min(1, delta));
@@ -181,7 +181,7 @@ for (const t of trades) {
 
 const arrowValue = Math.max(-1, Math.min(1, B / 12));
 
-/* ===== helpers ===== */
+/* ================= DRAW ================= */
 function timeToX(t) {
   return ((t - currentDayUTC) / DAY_MS) * W;
 }
@@ -224,7 +224,7 @@ function drawTimeLine() {
   timeEl.style.opacity = 1;
 }
 
-/* ===== render ===== */
+/* ================= RENDER ================= */
 function render() {
   ctx.clearRect(0,0,W,H);
 
