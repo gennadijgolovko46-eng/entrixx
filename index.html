@@ -45,10 +45,10 @@ import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-/* ================= WALLET ================= */
-const WALLET = "0xfae95f601f3a25ace60d19dbb929f2a5c57e3571";
+/* ===== REAL HYPERLIQUID ACCOUNT ===== */
+const WALLET = "0xd47587702a91731dc1089b5db0932cf820151a91";
 
-/* ================= CANVAS ================= */
+/* ===== CANVAS ===== */
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const timeEl = document.getElementById("time");
@@ -68,9 +68,8 @@ function resize(){
 window.addEventListener("resize", resize);
 resize();
 
-/* ================= TIME ================= */
+/* ===== TIME ===== */
 const DAY_MS = 86400000;
-
 let currentDayUTC = 0;
 let minDayUTC = 0;
 let maxDayUTC = 0;
@@ -80,7 +79,7 @@ function updateDate(){
   dateEl.textContent = d.toUTCString().slice(0,16);
 }
 
-/* ================= POINTER ================= */
+/* ===== POINTER ===== */
 let touchX=null;
 let startX=null;
 
@@ -117,7 +116,7 @@ function xToTimeUTC(x){
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
 
-/* ================= DATA ================= */
+/* ===== DATA ===== */
 let trades = [];
 let efficiency = {limitTime:null};
 let arrowValue = 0;
@@ -127,24 +126,20 @@ async function init(){
   trades = await loadTradesFromHyperliquid(WALLET);
 
   if (!trades.length) {
-    console.error("No trades for this wallet");
+    console.error("No trades for this account");
     return;
   }
 
-  // find day range from real trades
   const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
   minDayUTC = Math.min(...days);
   maxDayUTC = Math.max(...days);
 
-  // jump to first day with trades
-  currentDayUTC = minDayUTC;
+  currentDayUTC = maxDayUTC;
   updateDate();
 
-  // efficiency
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exitTimes);
 
-  // behavior arrow
   let B=0;
   frozen=false;
   for(const t of trades){
@@ -161,14 +156,14 @@ async function init(){
 
 await init();
 
-/* ===== FILTER TRADES BY DAY ===== */
+/* ===== FILTER ===== */
 function tradesForDay(dayUTC){
   const start = dayUTC;
   const end = dayUTC + DAY_MS;
   return trades.filter(t => t.entry_time >= start && t.entry_time < end);
 }
 
-/* ================= DRAW ================= */
+/* ===== DRAW ===== */
 function timeToX(t){ return ((t-currentDayUTC)/DAY_MS)*W; }
 
 function drawAtom(x,y,t){
@@ -203,7 +198,7 @@ function drawTimeLine(){
   timeEl.style.opacity=1;
 }
 
-/* ================= LOOP ================= */
+/* ===== LOOP ===== */
 function render(){
   ctx.clearRect(0,0,W,H);
 
