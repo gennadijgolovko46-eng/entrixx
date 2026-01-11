@@ -1,3 +1,4 @@
+// trades_from_hyperliquid.js
 const HL = "https://api.hyperliquid.xyz/info";
 
 async function post(body) {
@@ -6,9 +7,11 @@ async function post(body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
+  if (!r.ok) throw new Error("HL request failed");
   return r.json();
 }
 
+// account → fills
 async function getFills(account) {
   return post({
     type: "userFills",
@@ -16,14 +19,16 @@ async function getFills(account) {
   });
 }
 
+// fills → ENTRIXX trades
 function groupFills(fills) {
   const trades = [];
   const open = {};
+
   fills.sort((a,b)=>a.time-b.time);
 
   for (const f of fills) {
     const sym = f.coin;
-    const side = f.side;
+    const side = f.side;   // "B" or "S"
     const px = Number(f.px);
     const t = f.time;
 
@@ -46,6 +51,7 @@ function groupFills(fills) {
   return trades;
 }
 
+// PUBLIC API
 export async function loadTradesFromHyperliquid(account) {
   const fills = await getFills(account);
   return groupFills(fills);
