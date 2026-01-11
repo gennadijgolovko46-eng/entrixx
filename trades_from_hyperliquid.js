@@ -1,64 +1,68 @@
 // trades_from_hyperliquid.js
-
-const HL_ENDPOINT = "https://api.hyperliquid.xyz/info";
-
-// Hyperliquid uses nanoseconds → convert to ms
-const NS_TO_MS = 1_000_000;
+const HL = "https://api.hyperliquid.xyz/info";
+const DAY_MS = 86400000;
 
 async function post(body) {
-  const res = await fetch(HL_ENDPOINT, {
+  const r = await fetch(HL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error("HL request failed");
-  return res.json();
+  return r.json();
 }
 
-// Fetch all fills for wallet
-async function fetchFills(wallet) {
+// 1) wallet → trading account
+async function getAccount(wallet) {
+  const res = await post({
+    type: "userState",
+    user: wallet
+  });
+  return res.account; // this is 0x5b5d...c060
+}
+
+// 2) account → fills
+async function getFills(account) {
   return post({
     type: "userFills",
-    user: wallet
+    user: account
   });
 }
 
-// Group fills into trades (entry → exit)
-function groupFillsToTrades(fills) {
+// 3) fills → ENTRIXX trades
+function groupFills(fills) {
   const trades = [];
-  const stack = {};
+  const open = {};
 
-  fills.sort((a, b) => a.time - b.time);
+  fills.sort((a,b)=>a.time-b.time);
 
   for (const f of fills) {
     const sym = f.coin;
     const side = f.side; // "B" or "S"
-    const time = f.time / NS_TO_MS;   // FIX: convert to ms
-    const price = Number(f.px);
+    const px = Number(f.px);
+    const t = f.time;
 
-    if (!stack[sym]) {
-      // open
-      stack[sym] = { side, time, price };
+    if (!open[sym]) {
+      open[sym] = { side, t, px };
     } else {
-      const open = stack[sym];
-      if (open.side !== side) {
+      const o = open[sym];
+      if (o.side !== side) {
         trades.push({
-          entry_time: open.time,
-          exit_time: time,
-          entry_price: open.price,
-          exit_price: price,
-          dir: open.side === "B" ? 1 : -1
+          entry_time: o.t,
+          exit_time: t,
+          entry_price: o.px,
+          exit_price: px,
+          dir: o.side === "B" ? 1 : -1
         });
-        stack[sym] = null;
+        open[sym] = null;
       }
     }
   }
-
   return trades;
 }
 
-// PUBLIC API — returns ALL trades, unfiltered
+// PUBLIC API
 export async function loadTradesFromHyperliquid(wallet) {
-  const fills = await fetchFills(wallet);
-  return groupFillsToTrades(fills);
+  const account = await getAccount(wallet);       // FIX
+  const fills = await getFills(account);          // FIX
+  return groupFills(fills);                       // REAL TRADES
 }
