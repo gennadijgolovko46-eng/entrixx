@@ -82,10 +82,31 @@ updateDate();
 
 /* ================= POINTER ================= */
 let touchX=null;
-canvas.addEventListener("pointerdown",e=>touchX=e.clientX);
-canvas.addEventListener("pointermove",e=>{ if(touchX!==null) touchX=e.clientX;});
-canvas.addEventListener("pointerup",()=>{ touchX=null; timeEl.style.opacity=0;});
-canvas.addEventListener("pointerleave",()=>{ touchX=null; timeEl.style.opacity=0;});
+let startX=null;
+
+canvas.addEventListener("pointerdown",e=>{
+  touchX=e.clientX;
+  startX=e.clientX;
+});
+canvas.addEventListener("pointermove",e=>{
+  if(touchX!==null) touchX=e.clientX;
+});
+canvas.addEventListener("pointerup",async e=>{
+  const dx = e.clientX - startX;
+  touchX=null;
+  timeEl.style.opacity=0;
+
+  if (Math.abs(dx) > 40) {
+    if (dx > 0) currentDayUTC -= DAY_MS;
+    else currentDayUTC = Math.min(todayUTC, currentDayUTC + DAY_MS);
+    updateDate();
+    await init();        // <<< reload trades for new day
+  }
+});
+canvas.addEventListener("pointerleave",()=>{
+  touchX=null;
+  timeEl.style.opacity=0;
+});
 
 function xToTimeUTC(x){
   const m = Math.round((x/W)*1440);
@@ -99,7 +120,8 @@ let arrowValue = 0;
 let frozen = false;
 
 async function init(){
-  trades = await loadTradesFromHyperliquid(WALLET);
+  // LOAD ONLY THIS DAY
+  trades = await loadTradesFromHyperliquid(WALLET, currentDayUTC);
 
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exitTimes);
