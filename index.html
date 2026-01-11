@@ -70,15 +70,15 @@ resize();
 
 /* ================= TIME ================= */
 const DAY_MS = 86400000;
-const now = new Date();
-const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-let currentDayUTC = todayUTC;
+
+let currentDayUTC = 0;
+let minDayUTC = 0;
+let maxDayUTC = 0;
 
 function updateDate(){
   const d = new Date(currentDayUTC);
   dateEl.textContent = d.toUTCString().slice(0,16);
 }
-updateDate();
 
 /* ================= POINTER ================= */
 let touchX=null;
@@ -96,8 +96,11 @@ canvas.addEventListener("pointermove",e=>{
 canvas.addEventListener("pointerup",e=>{
   const dx = e.clientX - startX;
   if(Math.abs(dx)>40){
-    if(dx>0) currentDayUTC -= DAY_MS;
-    else currentDayUTC = Math.min(todayUTC,currentDayUTC+DAY_MS);
+    if(dx>0){
+      currentDayUTC = Math.max(minDayUTC, currentDayUTC - DAY_MS);
+    } else {
+      currentDayUTC = Math.min(maxDayUTC, currentDayUTC + DAY_MS);
+    }
     updateDate();
   }
   touchX=null;
@@ -123,9 +126,25 @@ let frozen = false;
 async function init(){
   trades = await loadTradesFromHyperliquid(WALLET);
 
+  if (!trades.length) {
+    console.error("No trades for this wallet");
+    return;
+  }
+
+  // find day range from real trades
+  const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
+  minDayUTC = Math.min(...days);
+  maxDayUTC = Math.max(...days);
+
+  // jump to first day with trades
+  currentDayUTC = minDayUTC;
+  updateDate();
+
+  // efficiency
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exitTimes);
 
+  // behavior arrow
   let B=0;
   frozen=false;
   for(const t of trades){
