@@ -1,8 +1,9 @@
 // trades_from_hyperliquid.js
-// Load real trades from Hyperliquid for a wallet and a UTC day
 
 const HL_ENDPOINT = "https://api.hyperliquid.xyz/info";
-const DAY_MS = 86400000;
+
+// Hyperliquid uses nanoseconds → convert to ms
+const NS_TO_MS = 1_000_000;
 
 async function post(body) {
   const res = await fetch(HL_ENDPOINT, {
@@ -22,27 +23,23 @@ async function fetchFills(wallet) {
   });
 }
 
-// Group fills into trades (entry -> exit)
+// Group fills into trades (entry → exit)
 function groupFillsToTrades(fills) {
   const trades = [];
   const stack = {};
 
-  // sort by time
   fills.sort((a, b) => a.time - b.time);
 
   for (const f of fills) {
     const sym = f.coin;
     const side = f.side; // "B" or "S"
-    const time = f.time;
+    const time = f.time / NS_TO_MS;   // FIX: convert to ms
     const price = Number(f.px);
-
-    if (!stack[sym]) stack[sym] = null;
 
     if (!stack[sym]) {
       // open
       stack[sym] = { side, time, price };
     } else {
-      // close
       const open = stack[sym];
       if (open.side !== side) {
         trades.push({
@@ -56,21 +53,12 @@ function groupFillsToTrades(fills) {
       }
     }
   }
+
   return trades;
 }
 
-// Filter trades by UTC day
-function filterByDay(trades, dayUTC) {
-  const start = dayUTC;
-  const end = dayUTC + DAY_MS;
-  return trades.filter(t =>
-    t.exit_time >= start && t.exit_time < end
-  );
-}
-
-// PUBLIC API
-export async function loadTradesFromHyperliquid(wallet, dayUTC) {
+// PUBLIC API — returns ALL trades, unfiltered
+export async function loadTradesFromHyperliquid(wallet) {
   const fills = await fetchFills(wallet);
-  const trades = groupFillsToTrades(fills);
-  return filterByDay(trades, dayUTC);
+  return groupFillsToTrades(fills);
 }
