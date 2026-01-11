@@ -46,7 +46,7 @@ import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
 /* ===== REAL HYPERLIQUID PERPS ACCOUNT ===== */
-const ACCOUNT = "0xac913dea861a2b2cae0a04332948d50202f800d0211d49fe5059e93d451e0517";
+const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 
 /* ===== CANVAS ===== */
 const canvas = document.getElementById("c");
@@ -73,11 +73,6 @@ const DAY_MS = 86400000;
 let currentDayUTC = 0;
 let minDayUTC = 0;
 let maxDayUTC = 0;
-
-function toUTCDay(ms){
-  const d = new Date(ms);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-}
 
 function updateDate(){
   const d = new Date(currentDayUTC);
@@ -131,15 +126,15 @@ async function init(){
   trades = await loadTradesFromHyperliquid(ACCOUNT);
 
   if (!trades.length) {
-    console.error("No trades");
+    console.error("No trades for this account");
     return;
   }
 
-  const days = trades.map(t => toUTCDay(t.entry_time));
+  const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
   minDayUTC = Math.min(...days);
   maxDayUTC = Math.max(...days);
 
-  currentDayUTC = maxDayUTC; // start from last real trading day
+  currentDayUTC = maxDayUTC;   // start at latest day
   updateDate();
 
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
