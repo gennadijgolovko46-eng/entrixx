@@ -45,8 +45,8 @@ import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-/* ===== REAL HYPERLIQUID ACCOUNT ===== */
-const WALLET = "0xd47587702a91731dc1089b5db0932cf820151a91";
+/* ===== REAL HYPERLIQUID PERPS ACCOUNT ===== */
+const ACCOUNT = "0xac913dea861a2b2cae0a04332948d50202f800d0211d49fe5059e93d451e0517";
 
 /* ===== CANVAS ===== */
 const canvas = document.getElementById("c");
@@ -123,17 +123,16 @@ let arrowValue = 0;
 let frozen = false;
 
 async function init(){
-  trades = await loadTradesFromHyperliquid(WALLET);
+  trades = await loadTradesFromHyperliquid(ACCOUNT);
 
   if (!trades.length) {
-    console.error("No trades for this account");
+    console.error("No trades");
     return;
   }
 
   const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
   minDayUTC = Math.min(...days);
   maxDayUTC = Math.max(...days);
-
   currentDayUTC = maxDayUTC;
   updateDate();
 
@@ -147,8 +146,7 @@ async function init(){
       frozen=true; break;
     }
     const hold = (t.exit_time - t.entry_time)/60000;
-    const market = 160;
-    const delta = hold - market;
+    const delta = hold - 160;
     B += Math.max(-1,Math.min(1,delta));
   }
   arrowValue = Math.max(-1,Math.min(1,B/12));
@@ -158,9 +156,10 @@ await init();
 
 /* ===== FILTER ===== */
 function tradesForDay(dayUTC){
-  const start = dayUTC;
-  const end = dayUTC + DAY_MS;
-  return trades.filter(t => t.entry_time >= start && t.entry_time < end);
+  return trades.filter(t =>
+    t.entry_time >= dayUTC &&
+    t.entry_time < dayUTC + DAY_MS
+  );
 }
 
 /* ===== DRAW ===== */
@@ -176,7 +175,7 @@ function drawAtom(x,y,t){
   ctx.lineTo(x+1, t.dir<0?bottom+160:top-160);
   ctx.stroke();
 
-  const hold=Math.max(2,Math.round((t.exit_time-t.entry_time)/60000));
+  const hold=Math.max(2,(t.exit_time-t.entry_time)/60000);
   ctx.strokeStyle="#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x-1, t.dir<0?bottom:top);
@@ -209,9 +208,8 @@ function render(){
     width:W, height:H
   });
 
-  const dayTrades = tradesForDay(currentDayUTC);
   const baseY=H*0.55;
-  for(const t of dayTrades){
+  for(const t of tradesForDay(currentDayUTC)){
     drawAtom(timeToX(t.entry_time), baseY, t);
   }
 
