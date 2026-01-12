@@ -45,8 +45,8 @@ import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadTradesFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-/* ===== REAL HYPERLIQUID USER ADDRESS ===== */
-const USER = "0x880ac484a1743862989a441d6d867238c7aa311c";
+/* ===== REAL HYPERLIQUID PERPS ACCOUNT ===== */
+const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 
 /* ===== CANVAS ===== */
 const canvas = document.getElementById("c");
@@ -71,7 +71,8 @@ resize();
 /* ===== TIME ===== */
 const DAY_MS = 86400000;
 let currentDayUTC = 0;
-let tradeDays = [];   // sorted unique days
+let minDayUTC = 0;
+let maxDayUTC = 0;
 
 function updateDate(){
   const d = new Date(currentDayUTC);
@@ -94,12 +95,10 @@ canvas.addEventListener("pointermove",e=>{
 canvas.addEventListener("pointerup",e=>{
   const dx = e.clientX - startX;
   if(Math.abs(dx)>40){
-    const idx = tradeDays.indexOf(currentDayUTC);
-    if(dx>0 && idx>0){
-      currentDayUTC = tradeDays[idx-1];
-    }
-    if(dx<0 && idx < tradeDays.length-1){
-      currentDayUTC = tradeDays[idx+1];
+    if(dx>0){
+      currentDayUTC = Math.max(minDayUTC, currentDayUTC - DAY_MS);
+    } else {
+      currentDayUTC = Math.min(maxDayUTC, currentDayUTC + DAY_MS);
     }
     updateDate();
   }
@@ -124,29 +123,22 @@ let arrowValue = 0;
 let frozen = false;
 
 async function init(){
-  trades = await loadTradesFromHyperliquid(USER);
+  trades = await loadTradesFromHyperliquid(ACCOUNT);
 
   if (!trades.length) {
-    console.error("No trades for this user");
+    console.error("No trades");
     return;
   }
 
-  /* build list of days that actually have trades */
-  const set = new Set();
-  for(const t of trades){
-    set.add(Math.floor(t.entry_time / DAY_MS) * DAY_MS);
-  }
-  tradeDays = Array.from(set).sort((a,b)=>a-b);
-
-  /* start on last (most recent) day */
-  currentDayUTC = tradeDays[tradeDays.length-1];
+  const days = trades.map(t => Math.floor(t.entry_time / DAY_MS) * DAY_MS);
+  minDayUTC = Math.min(...days);
+  maxDayUTC = Math.max(...days);
+  currentDayUTC = maxDayUTC;
   updateDate();
 
-  /* efficiency */
   const exitTimes = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exitTimes);
 
-  /* behavior arrow */
   let B=0;
   frozen=false;
   for(const t of trades){
