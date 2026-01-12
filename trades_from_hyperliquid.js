@@ -10,40 +10,42 @@ async function post(body) {
   return r.json();
 }
 
-// load ALL fills by paging backward in time
+/* wallet → L2 account */
+async function getAccount(wallet) {
+  const r = await post({ type: "userState", user: wallet });
+  return r.account;
+}
+
+/* paged fills */
 async function getAllFills(account) {
   let all = [];
-  let startTime = Date.now();
-  let keep = true;
+  let cursor = null;
 
-  while (keep) {
-    const batch = await post({
+  while (true) {
+    const r = await post({
       type: "userFills",
       user: account,
-      limit: 200,
-      startTime
+      limit: 500,
+      after: cursor
     });
 
-    if (!batch || batch.length === 0) break;
+    if (!r || !r.length) break;
 
-    all.push(...batch);
+    all.push(...r);
+    cursor = r[r.length - 1].time;
 
-    // go earlier than oldest fill
-    startTime = Math.min(...batch.map(f => f.time)) - 1;
-
-    // safety stop (in case API bugs)
-    if (batch.length < 200) keep = false;
+    if (r.length < 500) break;
   }
 
   return all;
 }
 
-// fills → ENTRIXX trades
+/* fills → trades */
 function groupFills(fills) {
   const trades = [];
   const open = {};
 
-  fills.sort((a,b)=>a.time-b.time);
+  fills.sort((a, b) => a.time - b.time);
 
   for (const f of fills) {
     const sym = f.coin;
@@ -70,7 +72,8 @@ function groupFills(fills) {
   return trades;
 }
 
-export async function loadTradesFromHyperliquid(account) {
+export async function loadTradesFromHyperliquid(wallet) {
+  const account = await getAccount(wallet);
   const fills = await getAllFills(account);
   return groupFills(fills);
 }
