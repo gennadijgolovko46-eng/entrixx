@@ -1,65 +1,57 @@
 const HL = "https://api.hyperliquid.xyz/info";
 
-async function post(body){
-  const r = await fetch(HL,{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify(body)
+async function post(body) {
+  const r = await fetch(HL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
   });
+  if (!r.ok) throw new Error("HL request failed");
   return r.json();
 }
 
-// L1 wallet -> L2 trading account
-async function getAccount(wallet){
-  const r = await post({
-    type:"userState",
-    user:wallet
-  });
-  return r.account;
-}
-
-// L2 account -> fills
-async function getFills(account){
+// account → fills
+async function getFills(account) {
   return post({
-    type:"userFills",
-    user:account
+    type: "userFills",
+    user: account
   });
 }
 
-function groupFills(fills){
-  const trades=[];
-  const open={};
+// fills → ENTRIXX trades
+function groupFills(fills) {
+  const trades = [];
+  const open = {};
 
   fills.sort((a,b)=>a.time-b.time);
 
-  for(const f of fills){
-    const s=f.coin;
-    const side=f.side;
-    const t=f.time;
-    const px=Number(f.px);
+  for (const f of fills) {
+    const sym = f.coin;
+    const side = f.side;   // "B" or "S"
+    const px = Number(f.px);
+    const t = f.time * 1000;   // FIX: seconds → ms
 
-    if(!open[s]){
-      open[s]={side,t,px};
-    }else{
-      const o=open[s];
-      if(o.side!==side){
+    if (!open[sym]) {
+      open[sym] = { side, t, px };
+    } else {
+      const o = open[sym];
+      if (o.side !== side) {
         trades.push({
-          entry_time:o.t,
-          exit_time:t,
-          entry_price:o.px,
-          exit_price:px,
-          dir:o.side==="B"?1:-1
+          entry_time: o.t,
+          exit_time: t,
+          entry_price: o.px,
+          exit_price: px,
+          dir: o.side === "B" ? 1 : -1
         });
-        open[s]=null;
+        open[sym] = null;
       }
     }
   }
   return trades;
 }
 
-export async function loadTradesFromHyperliquid(wallet){
-  const account = await getAccount(wallet);
-  if(!account) return [];
+// PUBLIC API
+export async function loadTradesFromHyperliquid(account) {
   const fills = await getFills(account);
   return groupFills(fills);
 }
