@@ -27,9 +27,11 @@ function groupFills(fills) {
 
   for (const f of fills) {
     const sym = f.coin;
-    const side = f.side;   // "B" or "S"
+    const side = f.side;
     const px = Number(f.px);
-    const t = f.time * 1000;   // FIX: seconds → ms
+
+    // normalize Hyperliquid time (sec or ms → ms)
+    const t = f.time > 1e12 ? f.time : f.time * 1000;
 
     if (!open[sym]) {
       open[sym] = { side, t, px };
