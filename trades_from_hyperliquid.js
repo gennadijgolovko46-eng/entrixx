@@ -10,15 +10,28 @@ async function post(body) {
   return r.json();
 }
 
-// account → fills
+/* ===== LOAD FULL HISTORY (with pagination) ===== */
 async function getFills(account) {
-  return post({
-    type: "userFills",
-    user: account
-  });
+  let all = [];
+  let end = Date.now();
+
+  for (let i = 0; i < 12; i++) {   // 12 pages ~ several thousand fills
+    const page = await post({
+      type: "userFills",
+      user: account,
+      startTime: end
+    });
+
+    if (!page || page.length === 0) break;
+
+    all = all.concat(page);
+    end = page[page.length - 1].time;
+  }
+
+  return all;
 }
 
-// fills → ENTRIXX trades
+/* ===== FILLS → TRADES ===== */
 function groupFills(fills) {
   const trades = [];
   const open = {};
@@ -26,12 +39,10 @@ function groupFills(fills) {
   fills.sort((a,b)=>a.time-b.time);
 
   for (const f of fills) {
-    const sym = f.coin;
-    const side = f.side;
-    const px = Number(f.px);
-
-    // normalize Hyperliquid time (sec or ms → ms)
-    const t = f.time > 1e12 ? f.time : f.time * 1000;
+    const sym  = f.coin;
+    const side = f.side;      // "B" or "S"
+    const px   = Number(f.px);
+    const t    = f.time;
 
     if (!open[sym]) {
       open[sym] = { side, t, px };
@@ -49,10 +60,11 @@ function groupFills(fills) {
       }
     }
   }
+
   return trades;
 }
 
-// PUBLIC API
+/* ===== PUBLIC API ===== */
 export async function loadTradesFromHyperliquid(account) {
   const fills = await getFills(account);
   return groupFills(fills);
