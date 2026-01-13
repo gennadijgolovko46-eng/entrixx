@@ -12,7 +12,10 @@ html,body{
   background:#fff;
   overflow:hidden;
 }
-canvas{display:block;touch-action:none}
+canvas{
+  display:block;
+  touch-action:none;
+}
 
 #date{
   position:fixed;
@@ -22,6 +25,7 @@ canvas{display:block;touch-action:none}
   font:12px system-ui,sans-serif;
   color:rgba(0,0,0,.45)
 }
+
 #time{
   position:fixed;
   top:8px;
@@ -34,6 +38,7 @@ canvas{display:block;touch-action:none}
 }
 </style>
 </head>
+
 <body>
 
 <canvas id="c"></canvas>
@@ -56,103 +61,107 @@ const timeEl = document.getElementById("time");
 let W=0,H=0;
 function resize(){
   const dpr = devicePixelRatio || 1;
-  W = innerWidth; 
+  W = innerWidth;
   H = innerHeight;
-  canvas.width = W*dpr; 
+  canvas.width = W*dpr;
   canvas.height = H*dpr;
-  canvas.style.width=W+"px"; 
-  canvas.style.height=H+"px";
+  canvas.style.width = W+"px";
+  canvas.style.height = H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 addEventListener("resize",resize);
 resize();
 
-let trades=[], days=[], dayIndex=0;
+let trades=[];
+let days=[];
+let dayIndex=0;
 let efficiency={limitTime:null};
-let arrowValue=0, frozen=false;
+let arrowValue=0;
+let frozen=false;
+
+let cursorX = null;
+let downX = null;
 
 dateEl.textContent="Loading…";
 
 async function init(){
   trades = await loadTradesFromHyperliquid(ACCOUNT);
-  if(!trades.length){ 
-    dateEl.textContent="No trades"; 
-    return; 
+  if(!trades.length){
+    dateEl.textContent="No trades";
+    return;
   }
 
-  const set=new Set();
-  for(const t of trades) {
+  const set = new Set();
+  for(const t of trades){
     set.add(Math.floor(t.entry_time/DAY)*DAY);
   }
-  days=[...set].sort((a,b)=>a-b);
-  dayIndex=days.length-1;
+  days = [...set].sort((a,b)=>a-b);
+  dayIndex = days.length-1;
 
-  const exits=trades.map(t=>t.exit_time).sort((a,b)=>a-b);
-  efficiency=computeEfficiency(exits);
+  const exits = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
+  efficiency = computeEfficiency(exits);
 
-  let B=0;
+  let B = 0;
   for(const t of trades){
-    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){ 
-      frozen=true; 
-      break; 
+    if(efficiency.limitTime && t.exit_time > efficiency.limitTime){
+      frozen = true;
+      break;
     }
-    const hold=(t.exit_time-t.entry_time)/60000;
-    B+=Math.max(-1,Math.min(1,hold-160));
+    const hold = (t.exit_time - t.entry_time)/60000;
+    B += Math.max(-1, Math.min(1, hold - 160));
   }
-  arrowValue=Math.max(-1,Math.min(1,B/12));
+  arrowValue = Math.max(-1, Math.min(1, B/12));
 
   updateDate();
 }
 await init();
 
 function updateDate(){
-  dateEl.textContent=new Date(days[dayIndex]).toUTCString().slice(0,16);
+  dateEl.textContent =
+    new Date(days[dayIndex]).toUTCString().slice(0,16);
 }
-
-let startX=null;
-canvas.addEventListener("pointerdown",e=>startX=e.clientX);
-canvas.addEventListener("pointerup",e=>{
-  const dx=e.clientX-startX;
-  if(Math.abs(dx)>40){
-    if(dx>0) dayIndex=Math.max(0,dayIndex-1);
-    else dayIndex=Math.min(days.length-1,dayIndex+1);
-    updateDate();
-  }
-});
 
 function tradesForDay(){
-  const d=days[dayIndex];
+  const d = days[dayIndex];
   return trades.filter(t=>t.entry_time>=d && t.entry_time<d+DAY);
 }
-function timeToX(t){ 
-  return ((t-days[dayIndex])/DAY)*W; 
+
+function timeToX(t){
+  return ((t-days[dayIndex])/DAY)*W;
 }
 
 function drawAtom(x,y,t){
   ctx.strokeStyle="#2DBE60";
-  ctx.beginPath(); 
-  ctx.moveTo(x+1,y); 
-  ctx.lineTo(x+1,y+(t.dir<0?160:-160)); 
+  ctx.beginPath();
+  ctx.moveTo(x+1,y);
+  ctx.lineTo(x+1,y+(t.dir<0?160:-160));
   ctx.stroke();
 
   const h=(t.exit_time-t.entry_time)/60000;
   ctx.strokeStyle="#2F6BFF";
-  ctx.beginPath(); 
-  ctx.moveTo(x-1,y); 
-  ctx.lineTo(x-1,y+(t.dir<0?h:-h)); 
+  ctx.beginPath();
+  ctx.moveTo(x-1,y);
+  ctx.lineTo(x-1,y+(t.dir<0?h:-h));
   ctx.stroke();
 
-  ctx.fillStyle="#000"; 
+  ctx.fillStyle="#000";
   ctx.fillRect(x-1,y-1,2,2);
 }
 
-// ===== TIME UNDER FINGER (RESTORED) =====
+/* ===== POINTER ===== */
+
+canvas.addEventListener("pointerdown", e=>{
+  downX = e.clientX;
+  cursorX = downX;
+});
+
 canvas.addEventListener("pointermove", e=>{
-  if(!days.length) return;
+  if(cursorX === null || !days.length) return;
+
+  cursorX = Math.max(0, Math.min(W, e.clientX));
 
   const d = days[dayIndex];
-  const x = Math.max(0, Math.min(W, e.clientX));
-  const t = d + (x/W)*DAY;
+  const t = d + (cursorX/W)*DAY;
 
   const dt = new Date(t);
   const hh = String(dt.getUTCHours()).padStart(2,"0");
@@ -162,14 +171,32 @@ canvas.addEventListener("pointermove", e=>{
   timeEl.style.opacity = 1;
 });
 
-canvas.addEventListener("pointerleave", ()=>{
-  timeEl.style.opacity = 0;
+canvas.addEventListener("pointerup", e=>{
+  if(downX !== null){
+    const dx = e.clientX - downX;
+    if(Math.abs(dx)>40){
+      if(dx>0) dayIndex=Math.max(0,dayIndex-1);
+      else dayIndex=Math.min(days.length-1,dayIndex+1);
+      updateDate();
+    }
+  }
+  downX=null;
+  cursorX=null;
+  timeEl.style.opacity=0;
 });
+
+canvas.addEventListener("pointerleave", ()=>{
+  downX=null;
+  cursorX=null;
+  timeEl.style.opacity=0;
+});
+
+/* ===== RENDER ===== */
 
 function render(){
   ctx.clearRect(0,0,W,H);
 
-  const d0=days[dayIndex];
+  const d0 = days[dayIndex];
   drawEfficiencyLayer(ctx,{
     dayStart:d0,
     dayEnd:d0+DAY,
@@ -178,9 +205,9 @@ function render(){
     height:H
   });
 
-  const baseY=H*0.55;
+  const baseY = H*0.55;
   for(const t of tradesForDay()){
-    drawAtom(timeToX(t.entry_time),baseY,t);
+    drawAtom(timeToX(t.entry_time), baseY, t);
   }
 
   drawBehaviorArrow(ctx,{
@@ -189,6 +216,16 @@ function render(){
     width:W,
     height:H
   });
+
+  if(cursorX !== null){
+    ctx.save();
+    ctx.strokeStyle="rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.moveTo(cursorX+0.5,0);
+    ctx.lineTo(cursorX+0.5,H);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   requestAnimationFrame(render);
 }
