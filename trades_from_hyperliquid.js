@@ -1,5 +1,5 @@
 // Single data gateway via Cloudflare Worker
-const HL = "https://entrixx.gennadijgolovko46.workers.dev";
+const HL = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
 async function post(body) {
   const r = await fetch(HL, {
