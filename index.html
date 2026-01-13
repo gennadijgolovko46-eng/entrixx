@@ -75,9 +75,10 @@ let trades=[], days=[], dayIndex=0;
 let efficiency={limitTime:null};
 let arrowValue=0, frozen=false;
 
-let startX=null;
-let currentX=null;
-let isSwipe=false;
+// pointer state
+let startX = null;
+let currentX = null;
+let isSwipe = false;
 
 dateEl.textContent="Loading…";
 
@@ -88,15 +89,15 @@ async function init(){
     return;
   }
 
-  const set = new Set();
+  const set=new Set();
   for(const t of trades){
     set.add(Math.floor(t.entry_time/DAY)*DAY);
   }
-  days = [...set].sort((a,b)=>a-b);
-  dayIndex = days.length-1;
+  days=[...set].sort((a,b)=>a-b);
+  dayIndex=days.length-1;
 
-  const exits = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
-  efficiency = computeEfficiency(exits);
+  const exits=trades.map(t=>t.exit_time).sort((a,b)=>a-b);
+  efficiency=computeEfficiency(exits);
 
   let B=0;
   for(const t of trades){
@@ -144,7 +145,7 @@ function drawAtom(x,y,t){
   ctx.fillRect(x-1,y-1,2,2);
 }
 
-/* POINTER HANDLING */
+/* POINTER */
 
 canvas.addEventListener("pointerdown", e=>{
   startX = e.clientX;
@@ -174,14 +175,16 @@ canvas.addEventListener("pointermove", e=>{
   timeEl.style.opacity=1;
 });
 
-canvas.addEventListener("pointerup", e=>{
+canvas.addEventListener("pointerup", ()=>{
   if(startX===null) return;
 
-  const dx = e.clientX - startX;
-
-  if(isSwipe){
-    if(dx>0) dayIndex=Math.max(0,dayIndex-1);
-    else dayIndex=Math.min(days.length-1,dayIndex+1);
+  if(isSwipe && currentX!==null){
+    const dx = currentX - startX;
+    if(dx>0){
+      dayIndex=Math.max(0,dayIndex-1);
+    }else{
+      dayIndex=Math.min(days.length-1,dayIndex+1);
+    }
     updateDate();
   }
 
@@ -198,7 +201,7 @@ canvas.addEventListener("pointerleave", ()=>{
   timeEl.style.opacity=0;
 });
 
-/* RENDER LOOP */
+/* RENDER */
 
 function render(){
   ctx.clearRect(0,0,W,H);
@@ -224,7 +227,7 @@ function render(){
     height:H
   });
 
-  if(startX!==null && !isSwipe){
+  if(startX!==null && !isSwipe && currentX!==null){
     const x=Math.max(0,Math.min(W,currentX));
     ctx.save();
     ctx.strokeStyle="rgba(0,0,0,0.35)";
