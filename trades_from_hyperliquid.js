@@ -10,24 +10,24 @@ async function post(body){
   return r.json();
 }
 
-// get ALL fills (no time slicing)
 async function getFills(account){
-  return post({
-    type: "userFills",
-    user: account
-  });
+  return post({ type:"userFills", user: account });
 }
 
-// fills → ENTRIXX atoms
+/*
+Turns raw fills into atomic trades:
+entry_time, exit_time, entry_price, exit_price, dir
+dir = +1 (long) or -1 (short)
+*/
 function groupFills(fills){
   const trades = [];
   const open = {};
 
-  fills.sort((a,b)=>a.time-b.time);
+  fills.sort((a,b)=>a.time - b.time);
 
   for(const f of fills){
     const sym  = f.coin;
-    const side = f.side;     // "B" or "S"
+    const side = f.side;   // "B" or "S"
     const px   = Number(f.px);
     const t    = f.time;
 
@@ -37,17 +37,16 @@ function groupFills(fills){
       const o = open[sym];
       if(o.side !== side){
         trades.push({
-          entry_time: o.t,
-          exit_time:  t,
+          entry_time:  o.t,
+          exit_time:   t,
           entry_price: o.px,
           exit_price:  px,
-          dir: o.side === "B" ? 1 : -1
+          dir:         o.side === "B" ? 1 : -1
         });
         open[sym] = null;
       }
     }
   }
-
   return trades;
 }
 
