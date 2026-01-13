@@ -75,7 +75,8 @@ let trades=[], days=[], dayIndex=0;
 let efficiency={limitTime:null};
 let arrowValue=0, frozen=false;
 
-// pointer state
+// unified pointer state
+let pointerId = null;
 let startX = null;
 let currentX = null;
 let isSwipe = false;
@@ -145,16 +146,19 @@ function drawAtom(x,y,t){
   ctx.fillRect(x-1,y-1,2,2);
 }
 
-/* POINTER */
+/* ===== POINTER (UNIFIED, CAPTURED) ===== */
 
 canvas.addEventListener("pointerdown", e=>{
+  pointerId = e.pointerId;
+  canvas.setPointerCapture(pointerId);
+
   startX = e.clientX;
   currentX = startX;
   isSwipe = false;
 });
 
 canvas.addEventListener("pointermove", e=>{
-  if(startX===null || !days.length) return;
+  if(e.pointerId!==pointerId || startX===null) return;
 
   currentX = e.clientX;
   const dx = currentX - startX;
@@ -175,33 +179,36 @@ canvas.addEventListener("pointermove", e=>{
   timeEl.style.opacity=1;
 });
 
-canvas.addEventListener("pointerup", ()=>{
-  if(startX===null) return;
+canvas.addEventListener("pointerup", e=>{
+  if(e.pointerId!==pointerId) return;
 
-  if(isSwipe && currentX!==null){
+  if(isSwipe){
     const dx = currentX - startX;
-    if(dx>0){
-      dayIndex=Math.max(0,dayIndex-1);
-    }else{
-      dayIndex=Math.min(days.length-1,dayIndex+1);
-    }
+    if(dx>0) dayIndex=Math.max(0,dayIndex-1);
+    else dayIndex=Math.min(days.length-1,dayIndex+1);
     updateDate();
   }
 
+  canvas.releasePointerCapture(pointerId);
+  pointerId=null;
   startX=null;
   currentX=null;
   isSwipe=false;
   timeEl.style.opacity=0;
 });
 
-canvas.addEventListener("pointerleave", ()=>{
+canvas.addEventListener("pointercancel", ()=>{
+  if(pointerId!==null){
+    canvas.releasePointerCapture(pointerId);
+  }
+  pointerId=null;
   startX=null;
   currentX=null;
   isSwipe=false;
   timeEl.style.opacity=0;
 });
 
-/* RENDER */
+/* ===== RENDER ===== */
 
 function render(){
   ctx.clearRect(0,0,W,H);
