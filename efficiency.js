@@ -1,21 +1,95 @@
-export function computeEfficiency(exits){
-  if(!exits.length) return {limitTime:null};
+// Efficiency Layer — FINAL
 
-  exits.sort((a,b)=>a-b);
-  const mean = exits.reduce((a,b)=>a+b,0)/exits.length;
-  const std = Math.sqrt(exits.reduce((s,x)=>s+(x-mean)**2,0)/exits.length);
-  const cv = std / mean;
+const WINDOW_SIZE = 6;
+const THRESHOLD_CV = 0.45;
+const MIN_EXITS = WINDOW_SIZE + 1;
 
-  if(cv < 0.35) return { limitTime: null };
+/*
+Computes when rhythm breaks.
+limitTime is AFTER the last stable atom.
+*/
+export function computeEfficiency(exitTimes){
+  if(!exitTimes || exitTimes.length < MIN_EXITS){
+    return { limitTime:null };
+  }
 
-  const idx = Math.floor(exits.length * 0.15);
-  return { limitTime: exits[idx] };
+  const deltas = [];
+  for(let i=1;i<exitTimes.length;i++){
+    deltas.push(exitTimes[i] - exitTimes[i-1]);
+  }
+
+  for(let i=WINDOW_SIZE-1;i<deltas.length;i++){
+    const window = deltas.slice(i-WINDOW_SIZE+1, i+1);
+
+    const mean = window.reduce((s,v)=>s+v,0) / window.length;
+    if(mean <= 0) continue;
+
+    let variance = 0;
+    for(const v of window){
+      const d = v - mean;
+      variance += d*d;
+    }
+    variance /= window.length;
+
+    const sigma = Math.sqrt(variance);
+    const cv = sigma / mean;
+
+    if(cv > THRESHOLD_CV){
+      const offset = mean;
+      return {
+        limitTime: exitTimes[i+1] + offset
+      };
+    }
+  }
+
+  return { limitTime:null };
 }
 
-export function drawEfficiencyLayer(ctx,{dayStart,dayEnd,limitTime,width,height}){
-  if(!limitTime) return;
+/*
+Draws bottom efficiency bar + red vertical cut
+*/
+export function drawEfficiencyLayer(ctx, opts){
+  const {
+    dayStart,
+    dayEnd,
+    limitTime,
+    width,
+    height,
+    barHeight = 6
+  } = opts;
 
-  const x = ((limitTime - dayStart)/(dayEnd-dayStart))*width;
-  ctx.fillStyle="rgba(255,0,0,0.08)";
-  ctx.fillRect(x,0,width-x,height);
+  const y = height - barHeight;
+
+  function timeToX(t){
+    return ((t - dayStart) / (dayEnd - dayStart)) * width;
+  }
+
+  ctx.save();
+
+  if(!limitTime){
+    ctx.fillStyle = "#2DBE60";
+    ctx.fillRect(0, y, width, barHeight);
+    ctx.restore();
+    return;
+  }
+
+  const xLimit = timeToX(limitTime);
+
+  // green
+  ctx.fillStyle = "#2DBE60";
+  ctx.fillRect(0, y, xLimit, barHeight);
+
+  // red vertical line (full screen)
+  ctx.strokeStyle = "#D10000";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(xLimit+0.5, 0);
+  ctx.lineTo(xLimit+0.5, height);
+  ctx.stroke();
+
+  // grey
+  ctx.fillStyle = "#B0B0B0";
+  ctx.fillRect(xLimit, y, width-xLimit, barHeight);
+
+  ctx.restore();
 }
