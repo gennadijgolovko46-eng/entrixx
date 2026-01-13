@@ -29,7 +29,8 @@ canvas{display:block;touch-action:none}
   transform:translateX(-50%);
   font:12px system-ui,sans-serif;
   color:rgba(0,0,0,.9);
-  opacity:0
+  opacity:0;
+  pointer-events:none;
 }
 </style>
 </head>
@@ -50,13 +51,17 @@ const DAY = 86400000;
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
+const timeEl = document.getElementById("time");
 
 let W=0,H=0;
 function resize(){
   const dpr = devicePixelRatio || 1;
-  W = innerWidth; H = innerHeight;
-  canvas.width = W*dpr; canvas.height = H*dpr;
-  canvas.style.width=W+"px"; canvas.style.height=H+"px";
+  W = innerWidth; 
+  H = innerHeight;
+  canvas.width = W*dpr; 
+  canvas.height = H*dpr;
+  canvas.style.width=W+"px"; 
+  canvas.style.height=H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 addEventListener("resize",resize);
@@ -70,10 +75,15 @@ dateEl.textContent="Loading…";
 
 async function init(){
   trades = await loadTradesFromHyperliquid(ACCOUNT);
-  if(!trades.length){ dateEl.textContent="No trades"; return; }
+  if(!trades.length){ 
+    dateEl.textContent="No trades"; 
+    return; 
+  }
 
   const set=new Set();
-  for(const t of trades) set.add(Math.floor(t.entry_time/DAY)*DAY);
+  for(const t of trades) {
+    set.add(Math.floor(t.entry_time/DAY)*DAY);
+  }
   days=[...set].sort((a,b)=>a-b);
   dayIndex=days.length-1;
 
@@ -82,7 +92,10 @@ async function init(){
 
   let B=0;
   for(const t of trades){
-    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){ frozen=true; break; }
+    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){ 
+      frozen=true; 
+      break; 
+    }
     const hold=(t.exit_time-t.entry_time)/60000;
     B+=Math.max(-1,Math.min(1,hold-160));
   }
@@ -111,31 +124,72 @@ function tradesForDay(){
   const d=days[dayIndex];
   return trades.filter(t=>t.entry_time>=d && t.entry_time<d+DAY);
 }
-function timeToX(t){ return ((t-days[dayIndex])/DAY)*W; }
+function timeToX(t){ 
+  return ((t-days[dayIndex])/DAY)*W; 
+}
 
 function drawAtom(x,y,t){
   ctx.strokeStyle="#2DBE60";
-  ctx.beginPath(); ctx.moveTo(x+1,y); ctx.lineTo(x+1,y+(t.dir<0?160:-160)); ctx.stroke();
+  ctx.beginPath(); 
+  ctx.moveTo(x+1,y); 
+  ctx.lineTo(x+1,y+(t.dir<0?160:-160)); 
+  ctx.stroke();
 
   const h=(t.exit_time-t.entry_time)/60000;
   ctx.strokeStyle="#2F6BFF";
-  ctx.beginPath(); ctx.moveTo(x-1,y); ctx.lineTo(x-1,y+(t.dir<0?h:-h)); ctx.stroke();
+  ctx.beginPath(); 
+  ctx.moveTo(x-1,y); 
+  ctx.lineTo(x-1,y+(t.dir<0?h:-h)); 
+  ctx.stroke();
 
-  ctx.fillStyle="#000"; ctx.fillRect(x-1,y-1,2,2);
+  ctx.fillStyle="#000"; 
+  ctx.fillRect(x-1,y-1,2,2);
 }
+
+// ===== TIME UNDER FINGER (RESTORED) =====
+canvas.addEventListener("pointermove", e=>{
+  if(!days.length) return;
+
+  const d = days[dayIndex];
+  const x = Math.max(0, Math.min(W, e.clientX));
+  const t = d + (x/W)*DAY;
+
+  const dt = new Date(t);
+  const hh = String(dt.getUTCHours()).padStart(2,"0");
+  const mm = String(dt.getUTCMinutes()).padStart(2,"0");
+
+  timeEl.textContent = `${hh}:${mm}`;
+  timeEl.style.opacity = 1;
+});
+
+canvas.addEventListener("pointerleave", ()=>{
+  timeEl.style.opacity = 0;
+});
 
 function render(){
   ctx.clearRect(0,0,W,H);
 
   const d0=days[dayIndex];
-  drawEfficiencyLayer(ctx,{dayStart:d0,dayEnd:d0+DAY,limitTime:efficiency.limitTime,width:W,height:H});
+  drawEfficiencyLayer(ctx,{
+    dayStart:d0,
+    dayEnd:d0+DAY,
+    limitTime:efficiency.limitTime,
+    width:W,
+    height:H
+  });
 
   const baseY=H*0.55;
   for(const t of tradesForDay()){
     drawAtom(timeToX(t.entry_time),baseY,t);
   }
 
-  drawBehaviorArrow(ctx,{value:arrowValue,frozen,width:W,height:H});
+  drawBehaviorArrow(ctx,{
+    value:arrowValue,
+    frozen,
+    width:W,
+    height:H
+  });
+
   requestAnimationFrame(render);
 }
 render();
