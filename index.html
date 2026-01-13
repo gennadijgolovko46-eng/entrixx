@@ -75,11 +75,10 @@ let trades=[], days=[], dayIndex=0;
 let efficiency={limitTime:null};
 let arrowValue=0, frozen=false;
 
-// unified pointer state
-let pointerId = null;
-let startX = null;
-let currentX = null;
-let isSwipe = false;
+// pointer state
+let pointerId=null;
+let startX=null;
+let currentX=null;
 
 dateEl.textContent="Loading…";
 
@@ -116,7 +115,9 @@ async function init(){
 await init();
 
 function updateDate(){
-  dateEl.textContent=new Date(days[dayIndex]).toUTCString().slice(0,16);
+  dateEl.textContent =
+    dayIndex + " | " +
+    new Date(days[dayIndex]).toUTCString().slice(0,16);
 }
 
 function tradesForDay(){
@@ -146,32 +147,24 @@ function drawAtom(x,y,t){
   ctx.fillRect(x-1,y-1,2,2);
 }
 
-/* ===== POINTER (UNIFIED, CAPTURED) ===== */
+/* POINTER */
 
 canvas.addEventListener("pointerdown", e=>{
-  pointerId = e.pointerId;
+  pointerId=e.pointerId;
   canvas.setPointerCapture(pointerId);
-
-  startX = e.clientX;
-  currentX = startX;
-  isSwipe = false;
+  startX=e.clientX;
+  currentX=startX;
 });
 
 canvas.addEventListener("pointermove", e=>{
   if(e.pointerId!==pointerId || startX===null) return;
 
-  currentX = e.clientX;
-  const dx = currentX - startX;
+  currentX=e.clientX;
 
-  if(Math.abs(dx) > SWIPE_PX){
-    isSwipe = true;
-    return;
-  }
-
-  const x = Math.max(0,Math.min(W,currentX));
-  const d = days[dayIndex];
-  const t = d + (x/W)*DAY;
-  const dt = new Date(t);
+  const x=Math.max(0,Math.min(W,currentX));
+  const d=days[dayIndex];
+  const t=d+(x/W)*DAY;
+  const dt=new Date(t);
 
   timeEl.textContent =
     String(dt.getUTCHours()).padStart(2,"0")+":"+
@@ -182,8 +175,8 @@ canvas.addEventListener("pointermove", e=>{
 canvas.addEventListener("pointerup", e=>{
   if(e.pointerId!==pointerId) return;
 
-  if(isSwipe){
-    const dx = currentX - startX;
+  const dx=currentX-startX;
+  if(Math.abs(dx)>SWIPE_PX){
     if(dx>0) dayIndex=Math.max(0,dayIndex-1);
     else dayIndex=Math.min(days.length-1,dayIndex+1);
     updateDate();
@@ -193,22 +186,18 @@ canvas.addEventListener("pointerup", e=>{
   pointerId=null;
   startX=null;
   currentX=null;
-  isSwipe=false;
   timeEl.style.opacity=0;
 });
 
 canvas.addEventListener("pointercancel", ()=>{
-  if(pointerId!==null){
-    canvas.releasePointerCapture(pointerId);
-  }
+  if(pointerId!==null) canvas.releasePointerCapture(pointerId);
   pointerId=null;
   startX=null;
   currentX=null;
-  isSwipe=false;
   timeEl.style.opacity=0;
 });
 
-/* ===== RENDER ===== */
+/* RENDER */
 
 function render(){
   ctx.clearRect(0,0,W,H);
@@ -234,7 +223,7 @@ function render(){
     height:H
   });
 
-  if(startX!==null && !isSwipe && currentX!==null){
+  if(startX!==null && currentX!==null){
     const x=Math.max(0,Math.min(W,currentX));
     ctx.save();
     ctx.strokeStyle="rgba(0,0,0,0.35)";
