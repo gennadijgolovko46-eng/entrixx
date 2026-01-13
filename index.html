@@ -1,26 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ENTRIXX</title>
 
 <style>
-html,body{margin:0;background:#fff;overflow:hidden}
+html,body{
+  margin:0;
+  padding:0;
+  background:#fff;
+  overflow:hidden;
+}
 canvas{display:block;touch-action:none}
+
 #date{
   position:fixed;
   bottom:14px;
   left:50%;
   transform:translateX(-50%);
-  font:12px system-ui;
+  font:12px system-ui,sans-serif;
   color:rgba(0,0,0,.45)
+}
+#time{
+  position:fixed;
+  top:8px;
+  left:50%;
+  transform:translateX(-50%);
+  font:12px system-ui,sans-serif;
+  color:rgba(0,0,0,.9);
+  opacity:0
 }
 </style>
 </head>
-
 <body>
+
 <canvas id="c"></canvas>
+<div id="time"></div>
 <div id="date"></div>
 
 <script type="module">
@@ -37,49 +53,36 @@ const dateEl = document.getElementById("date");
 
 let W=0,H=0;
 function resize(){
-  const dpr=window.devicePixelRatio||1;
-  W=innerWidth; H=innerHeight;
-  canvas.width=W*dpr; canvas.height=H*dpr;
+  const dpr = devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  canvas.width = W*dpr; canvas.height = H*dpr;
   canvas.style.width=W+"px"; canvas.style.height=H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-addEventListener("resize",resize); resize();
+addEventListener("resize",resize);
+resize();
 
-let trades=[];
-let days=[];
-let dayIndex=0;
+let trades=[], days=[], dayIndex=0;
 let efficiency={limitTime:null};
-let arrowValue=0;
-let frozen=false;
+let arrowValue=0, frozen=false;
 
 dateEl.textContent="Loading…";
 
 async function init(){
   trades = await loadTradesFromHyperliquid(ACCOUNT);
-  if(!trades.length){
-    dateEl.textContent="No trades";
-    return;
-  }
+  if(!trades.length){ dateEl.textContent="No trades"; return; }
 
-  // build real trading calendar from trades
-  const set = new Set();
-  for(const t of trades){
-    set.add(Math.floor(t.entry_time/DAY)*DAY);
-  }
-  days = [...set].sort((a,b)=>a-b);
-  dayIndex = days.length-1;
+  const set=new Set();
+  for(const t of trades) set.add(Math.floor(t.entry_time/DAY)*DAY);
+  days=[...set].sort((a,b)=>a-b);
+  dayIndex=days.length-1;
 
-  // global efficiency
-  const exits = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
-  efficiency = computeEfficiency(exits);
+  const exits=trades.map(t=>t.exit_time).sort((a,b)=>a-b);
+  efficiency=computeEfficiency(exits);
 
-  // behavior arrow
   let B=0;
-  frozen=false;
   for(const t of trades){
-    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){
-      frozen=true; break;
-    }
+    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){ frozen=true; break; }
     const hold=(t.exit_time-t.entry_time)/60000;
     B+=Math.max(-1,Math.min(1,hold-160));
   }
@@ -87,14 +90,12 @@ async function init(){
 
   updateDate();
 }
-
 await init();
 
 function updateDate(){
   dateEl.textContent=new Date(days[dayIndex]).toUTCString().slice(0,16);
 }
 
-// swipe days
 let startX=null;
 canvas.addEventListener("pointerdown",e=>startX=e.clientX);
 canvas.addEventListener("pointerup",e=>{
@@ -106,41 +107,28 @@ canvas.addEventListener("pointerup",e=>{
   }
 });
 
-// helpers
-function timeToX(t){ return ((t-days[dayIndex])/DAY)*W; }
 function tradesForDay(){
   const d=days[dayIndex];
   return trades.filter(t=>t.entry_time>=d && t.entry_time<d+DAY);
 }
+function timeToX(t){ return ((t-days[dayIndex])/DAY)*W; }
 
 function drawAtom(x,y,t){
   ctx.strokeStyle="#2DBE60";
-  ctx.beginPath();
-  ctx.moveTo(x,y);
-  ctx.lineTo(x,y+(t.dir<0?160:-160));
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+1,y); ctx.lineTo(x+1,y+(t.dir<0?160:-160)); ctx.stroke();
 
   const h=(t.exit_time-t.entry_time)/60000;
   ctx.strokeStyle="#2F6BFF";
-  ctx.beginPath();
-  ctx.moveTo(x,y);
-  ctx.lineTo(x,y+(t.dir<0?h:-h));
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-1,y); ctx.lineTo(x-1,y+(t.dir<0?h:-h)); ctx.stroke();
 
-  ctx.fillRect(x-1,y-1,2,2);
+  ctx.fillStyle="#000"; ctx.fillRect(x-1,y-1,2,2);
 }
 
 function render(){
   ctx.clearRect(0,0,W,H);
 
-  const d=days[dayIndex];
-  drawEfficiencyLayer(ctx,{
-    dayStart:d,
-    dayEnd:d+DAY,
-    limitTime:efficiency.limitTime,
-    width:W,
-    height:H
-  });
+  const d0=days[dayIndex];
+  drawEfficiencyLayer(ctx,{dayStart:d0,dayEnd:d0+DAY,limitTime:efficiency.limitTime,width:W,height:H});
 
   const baseY=H*0.55;
   for(const t of tradesForDay()){
