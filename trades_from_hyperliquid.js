@@ -34,7 +34,7 @@ function groupFills(fills) {
 
   for (const f of fills) {
     const sym = f.coin;
-    const side = f.side; // "B" or "S"
+    const side = f.side;
     const px = Number(f.px);
     const t = f.time;
 
@@ -61,7 +61,9 @@ function groupFills(fills) {
   return trades;
 }
 
-export async function loadTradesFromHyperliquid(account) {
+// New public API: return both raw fills and aggregated trades
+export async function loadDataFromHyperliquid(account) {
   const fills = await getFills(account);
-  return groupFills(fills);
+  const trades = groupFills(fills);
+  return { fills, trades };
 }
