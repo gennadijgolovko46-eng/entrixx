@@ -89,14 +89,16 @@ async function init(){
     return;
   }
 
-  let minT=Infinity, maxT=-Infinity;
+  let minT=Infinity;
   for(const t of trades){
     minT=Math.min(minT,t.entry_time,t.exit_time);
-    maxT=Math.max(maxT,t.entry_time,t.exit_time);
   }
 
+  // ===== FIXED MODEL =====
+  // Start = first activity (UTC day)
+  // End   = TODAY (UTC day)
   const startDay = dayFloorUTC(minT);
-  const endDay   = dayFloorUTC(maxT);
+  const endDay   = dayFloorUTC(Date.now());
 
   days=[];
   for(let d=startDay; d<=endDay; d+=DAY){
