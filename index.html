@@ -22,7 +22,7 @@ canvas{
   left:50%;
   transform:translateX(-50%);
   font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.45);
+  color:rgba(0,0,0,.45)
 }
 #time{
   position:fixed;
@@ -81,9 +81,11 @@ let efficiency = { limitTime:null };
 let arrowValue = 0;
 let frozen = false;
 
+// input state
+let isDown = false;
+let isSwipe = false;
 let startX = null;
 let currentX = null;
-let isDown = false;
 
 dateEl.textContent = "Loading...";
 
@@ -151,41 +153,64 @@ function timeToX(t){
   return ((t - days[dayIndex]) / DAY) * W;
 }
 
-/* ===== DRAW ATOM (FIXED) ===== */
+/* ===== DRAW ===== */
 function drawAtom(x, y, t){
-  // green direction tail
   ctx.strokeStyle = "#2DBE60";
   ctx.beginPath();
   ctx.moveTo(x + 1, y);
-  ctx.lineTo(x + 1, y + (t.dir < 0 ? 140 : -140));
+  ctx.lineTo(x + 1, y + (t.dir < 0 ? 160 : -160));
   ctx.stroke();
 
-  // blue hold (normalized)
-  const holdMin = (t.exit_time - t.entry_time) / 60000;
-  const MAX_HOLD = 360;
-  const HOLD_PX = 120;
-  const h = Math.min(holdMin, MAX_HOLD) / MAX_HOLD * HOLD_PX;
-
+  const h = (t.exit_time - t.entry_time) / 60000;
   ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x - 1, y);
   ctx.lineTo(x - 1, y + (t.dir < 0 ? h : -h));
   ctx.stroke();
 
-  // entry point
   ctx.fillStyle = "#000";
   ctx.fillRect(x - 1, y - 1, 2, 2);
 }
 
 /* ===== INPUT ===== */
-function endSwipe(){
+canvas.addEventListener("pointerdown", e => {
+  isDown = true;
+  isSwipe = false;
+  startX = currentX = e.clientX;
+});
+
+canvas.addEventListener("pointermove", e => {
+  if(!isDown) return;
+
+  currentX = e.clientX;
   const dx = currentX - startX;
+
   if(Math.abs(dx) > SWIPE_PX){
-    if(dx > 0) dayIndex = Math.max(0, dayIndex - 1);
-    else dayIndex = Math.min(days.length - 1, dayIndex + 1);
+    isSwipe = true;
+    return;
+  }
+
+  updateTime(Math.max(0, Math.min(W, currentX)));
+});
+
+canvas.addEventListener("pointerup", endSwipe);
+canvas.addEventListener("pointercancel", endSwipe);
+
+function endSwipe(){
+  if(!isDown) return;
+
+  if(isSwipe){
+    const dx = currentX - startX;
+    if(dx > 0){
+      dayIndex = Math.max(0, dayIndex - 1);
+    }else{
+      dayIndex = Math.min(days.length - 1, dayIndex + 1);
+    }
     updateDate();
   }
+
   isDown = false;
+  isSwipe = false;
   startX = currentX = null;
   timeEl.style.opacity = 0;
 }
@@ -198,18 +223,6 @@ function updateTime(x){
     String(d.getMinutes()).padStart(2,"0");
   timeEl.style.opacity = 1;
 }
-
-canvas.addEventListener("pointerdown", e => {
-  isDown = true;
-  startX = currentX = e.clientX;
-});
-canvas.addEventListener("pointermove", e => {
-  if(!isDown) return;
-  currentX = e.clientX;
-  updateTime(Math.max(0, Math.min(W, currentX)));
-});
-canvas.addEventListener("pointerup", () => { if(isDown) endSwipe(); });
-canvas.addEventListener("pointercancel", () => { if(isDown) endSwipe(); });
 
 /* ===== RENDER ===== */
 function render(){
@@ -236,7 +249,7 @@ function render(){
     height: H
   });
 
-  if(isDown && currentX !== null){
+  if(isDown && !isSwipe && currentX !== null){
     const x = Math.max(0, Math.min(W, currentX));
     ctx.strokeStyle = "rgba(0,0,0,0.35)";
     ctx.beginPath();
