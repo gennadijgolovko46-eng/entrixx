@@ -12,10 +12,7 @@ html,body{
   background:#fff;
   overflow:hidden;
 }
-canvas{
-  display:block;
-  touch-action:none;
-}
+canvas{display:block;touch-action:none}
 #date{
   position:fixed;
   bottom:14px;
@@ -56,40 +53,28 @@ const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
 const timeEl = document.getElementById("time");
 
-let W = 0;
-let H = 0;
-
+let W=0,H=0;
 function resize(){
   const dpr = devicePixelRatio || 1;
   W = innerWidth;
   H = innerHeight;
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
-  canvas.style.width = W + "px";
-  canvas.style.height = H + "px";
+  canvas.width = W*dpr;
+  canvas.height = H*dpr;
+  canvas.style.width=W+"px";
+  canvas.style.height=H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-addEventListener("resize", resize);
+addEventListener("resize",resize);
 resize();
 
-let fills = [];
-let trades = [];
-let days = [];
-let dayIndex = 0;
+let fills=[], trades=[], days=[], dayIndex=0;
+let efficiency={limitTime:null};
+let arrowValue=0, frozen=false;
 
-let efficiency = { limitTime:null };
-let arrowValue = 0;
-let frozen = false;
+let startX=null, currentX=null, isDown=false;
 
-// input state
-let isDown = false;
-let isSwipe = false;
-let startX = null;
-let currentX = null;
+dateEl.textContent="Loading...";
 
-dateEl.textContent = "Loading...";
-
-/* ===== UTC DAY FLOOR ===== */
 function dayFloorUTC(t){
   const d = new Date(t);
   d.setUTCHours(0,0,0,0);
@@ -101,44 +86,22 @@ async function init(){
   fills = data.fills;
   trades = data.trades;
 
-  if(!fills.length){
-    dateEl.textContent = "No data";
-    return;
-  }
-
   let minT = Infinity;
-  for(const f of fills){
-    minT = Math.min(minT, f.time);
-  }
+  for(const f of fills) minT = Math.min(minT, f.time);
 
   const startDay = dayFloorUTC(minT);
   const endDay = dayFloorUTC(Date.now());
 
-  days = [];
-  for(let d = startDay; d <= endDay; d += DAY){
-    days.push(d);
-  }
+  for(let d=startDay; d<=endDay; d+=DAY) days.push(d);
   dayIndex = days.length - 1;
 
-  const exits = trades.map(t => t.exit_time).sort((a,b)=>a-b);
+  const exits = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exits);
-
-  let B = 0;
-  for(const t of trades){
-    if(efficiency.limitTime && t.exit_time > efficiency.limitTime){
-      frozen = true;
-      break;
-    }
-    const hold = (t.exit_time - t.entry_time) / 60000;
-    B += Math.max(-1, Math.min(1, hold - 160));
-  }
-  arrowValue = Math.max(-1, Math.min(1, B / 12));
 
   updateDate();
 }
 await init();
 
-/* ===== UI ===== */
 function updateDate(){
   dateEl.textContent = new Date(days[dayIndex]).toDateString();
 }
@@ -146,117 +109,57 @@ function updateDate(){
 function tradesForDay(){
   const d0 = days[dayIndex];
   const d1 = d0 + DAY;
-  return trades.filter(t => t.entry_time < d1 && t.exit_time > d0);
+  return trades.filter(t => t.exit_time > d0 && t.entry_time < d1);
 }
 
 function timeToX(t){
   return ((t - days[dayIndex]) / DAY) * W;
 }
 
-/* ===== DRAW ===== */
-function drawAtom(x, y, t){
-  ctx.strokeStyle = "#2DBE60";
-  ctx.beginPath();
-  ctx.moveTo(x + 1, y);
-  ctx.lineTo(x + 1, y + (t.dir < 0 ? 160 : -160));
-  ctx.stroke();
+function drawAtom(t){
+  const d0 = days[dayIndex];
+  const d1 = d0 + DAY;
 
+  const x0 = timeToX(Math.max(t.entry_time, d0));
+  const x1 = timeToX(Math.min(t.exit_time, d1));
+
+  const y = H * 0.55;
   const h = (t.exit_time - t.entry_time) / 60000;
-  ctx.strokeStyle = "#2F6BFF";
+  const dir = t.dir < 0 ? -1 : 1;
+
+  ctx.strokeStyle="#2F6BFF";
   ctx.beginPath();
-  ctx.moveTo(x - 1, y);
-  ctx.lineTo(x - 1, y + (t.dir < 0 ? h : -h));
+  ctx.moveTo(x0, y);
+  ctx.lineTo(x1, y + dir * Math.min(h,160));
   ctx.stroke();
 
-  ctx.fillStyle = "#000";
-  ctx.fillRect(x - 1, y - 1, 2, 2);
+  ctx.strokeStyle="#2DBE60";
+  ctx.beginPath();
+  ctx.moveTo(x1, y);
+  ctx.lineTo(x1, y + dir * 160);
+  ctx.stroke();
 }
 
-/* ===== INPUT ===== */
-canvas.addEventListener("pointerdown", e => {
-  isDown = true;
-  isSwipe = false;
-  startX = currentX = e.clientX;
-});
-
-canvas.addEventListener("pointermove", e => {
-  if(!isDown) return;
-
-  currentX = e.clientX;
-  const dx = currentX - startX;
-
-  if(Math.abs(dx) > SWIPE_PX){
-    isSwipe = true;
-    return;
-  }
-
-  updateTime(Math.max(0, Math.min(W, currentX)));
-});
-
-canvas.addEventListener("pointerup", endSwipe);
-canvas.addEventListener("pointercancel", endSwipe);
-
-function endSwipe(){
-  if(!isDown) return;
-
-  if(isSwipe){
-    const dx = currentX - startX;
-    if(dx > 0){
-      dayIndex = Math.max(0, dayIndex - 1);
-    }else{
-      dayIndex = Math.min(days.length - 1, dayIndex + 1);
-    }
-    updateDate();
-  }
-
-  isDown = false;
-  isSwipe = false;
-  startX = currentX = null;
-  timeEl.style.opacity = 0;
-}
-
-function updateTime(x){
-  const t = days[dayIndex] + (x / W) * DAY;
-  const d = new Date(t);
-  timeEl.textContent =
-    String(d.getHours()).padStart(2,"0") + ":" +
-    String(d.getMinutes()).padStart(2,"0");
-  timeEl.style.opacity = 1;
-}
-
-/* ===== RENDER ===== */
 function render(){
   ctx.clearRect(0,0,W,H);
 
   const d0 = days[dayIndex];
   drawEfficiencyLayer(ctx,{
-    dayStart: d0,
-    dayEnd: d0 + DAY,
-    limitTime: efficiency.limitTime,
-    width: W,
-    height: H
+    dayStart:d0,
+    dayEnd:d0+DAY,
+    limitTime:efficiency.limitTime,
+    width:W,
+    height:H
   });
 
-  const baseY = H * 0.55;
-  for(const t of tradesForDay()){
-    drawAtom(timeToX(t.entry_time), baseY, t);
-  }
+  for(const t of tradesForDay()) drawAtom(t);
 
   drawBehaviorArrow(ctx,{
-    value: arrowValue,
+    value:arrowValue,
     frozen,
-    width: W,
-    height: H
+    width:W,
+    height:H
   });
-
-  if(isDown && !isSwipe && currentX !== null){
-    const x = Math.max(0, Math.min(W, currentX));
-    ctx.strokeStyle = "rgba(0,0,0,0.35)";
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, H);
-    ctx.stroke();
-  }
 
   requestAnimationFrame(render);
 }
