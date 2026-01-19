@@ -4,7 +4,12 @@
 <meta charset="UTF-8">
 <title>ENTRIXX</title>
 <style>
-html,body{margin:0;padding:0;overflow:hidden;background:#fff}
+html,body{
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#fff;
+}
 canvas{display:block}
 #date{
   position:fixed;
@@ -25,26 +30,28 @@ canvas{display:block}
 import { loadDataFromHyperliquid } from "./trades_from_hyperliquid.js";
 
 const DAY = 86400000;
+const ACCOUNT = "ACCOUNT";
+
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
 
-let W,H;
+let W = 0, H = 0;
 
 function resize(){
   const dpr = devicePixelRatio || 1;
   W = innerWidth;
   H = innerHeight;
-  canvas.width = W*dpr;
-  canvas.height = H*dpr;
-  canvas.style.width = W+"px";
-  canvas.style.height = H+"px";
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-addEventListener("resize",resize);
+addEventListener("resize", resize);
 resize();
 
-let trades = [];
+let atoms = [];
 let days = [];
 let dayIndex = 0;
 
@@ -54,29 +61,30 @@ function dayFloorUTC(t){
   return d.getTime();
 }
 
-function tradesForDay(d0){
+function atomsForDay(d0){
   const d1 = d0 + DAY;
-  return trades.filter(t => t.exit_time >= d0 && t.exit_time < d1);
+  return atoms.filter(a => a.exit_time >= d0 && a.exit_time < d1);
 }
 
-function computeDayScale(dayTrades){
+function computeDayScale(dayAtoms){
   let maxAbs = 0;
-  for(const t of dayTrades){
+  for(const a of dayAtoms){
     maxAbs = Math.max(
       maxAbs,
-      Math.abs(t.HOLD_price),
-      Math.abs(t.MARKET_price)
+      Math.abs(a.HOLD_price),
+      Math.abs(a.MARKET_price)
     );
   }
   return maxAbs || 1;
 }
 
-function drawAtom(t, d0, dayScale){
-  const x = ((t.exit_time - d0) / DAY) * W;
+function drawAtom(a, d0, scale){
+  const x = ((a.exit_time - d0) / DAY) * W;
   const y = H * 0.55;
 
-  if(t.liquidated){
-    ctx.strokeStyle="#D10000";
+  if(a.liquidated){
+    ctx.strokeStyle = "#D10000";
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(x-6,y-6); ctx.lineTo(x+6,y+6);
     ctx.moveTo(x-6,y+6); ctx.lineTo(x+6,y-6);
@@ -87,27 +95,29 @@ function drawAtom(t, d0, dayScale){
   const ATOM_H = 160;
   const EPS = 6;
 
-  const blueLen  = Math.max(Math.abs(t.HOLD_price)/dayScale*ATOM_H, EPS);
-  const greenLen = Math.abs(t.MARKET_price)/dayScale*ATOM_H;
+  const blueLen  = Math.max(Math.abs(a.HOLD_price)   / scale * ATOM_H, EPS);
+  const greenLen = Math.abs(a.MARKET_price) / scale * ATOM_H;
 
-  const dirBlue  = t.side==="B" ? -1 : 1;
-  const dirGreen = Math.sign(t.MARKET_price);
+  const dirBlue  = a.side === "B" ? -1 : 1;
+  const dirGreen = Math.sign(a.MARKET_price);
 
-  ctx.strokeStyle="#2F6BFF";
+  ctx.lineWidth = 1.5;
+
+  ctx.strokeStyle = "#2F6BFF";
   ctx.beginPath();
   ctx.moveTo(x,y);
-  ctx.lineTo(x,y+dirBlue*blueLen);
+  ctx.lineTo(x,y + dirBlue * blueLen);
   ctx.stroke();
 
-  if(greenLen>0){
-    ctx.strokeStyle="#2DBE60";
+  if(greenLen > 0){
+    ctx.strokeStyle = "#2DBE60";
     ctx.beginPath();
     ctx.moveTo(x,y);
-    ctx.lineTo(x,y+dirGreen*greenLen);
+    ctx.lineTo(x,y + dirGreen * greenLen);
     ctx.stroke();
   }
 
-  ctx.fillStyle="#000";
+  ctx.fillStyle = "#000";
   ctx.fillRect(x-2,y-2,4,4);
 }
 
@@ -115,30 +125,61 @@ function render(){
   ctx.clearRect(0,0,W,H);
 
   const d0 = days[dayIndex];
-  const dayTrades = tradesForDay(d0);
-  const scale = computeDayScale(dayTrades);
+  const dayAtoms = atomsForDay(d0);
+  const scale = computeDayScale(dayAtoms);
 
-  for(const t of dayTrades){
-    drawAtom(t,d0,scale);
+  for(const a of dayAtoms){
+    drawAtom(a, d0, scale);
   }
 
   requestAnimationFrame(render);
 }
 
+function tradeToAtom(t){
+  const HOLD_price =
+    t.side === "B"
+      ? t.exit_price - t.entry_price
+      : t.entry_price - t.exit_price;
+
+  const dUp   = t.market_max - t.exit_price;
+  const dDown = t.market_min - t.exit_price;
+
+  const MARKET_price =
+    Math.abs(dUp) >= Math.abs(dDown)
+      ? dUp
+      : dDown;
+
+  return {
+    exit_time: t.exit_time,
+    side: t.side,
+    HOLD_price,
+    MARKET_price,
+    liquidated: false
+  };
+}
+
 (async ()=>{
-  const data = await loadDataFromHyperliquid("ACCOUNT");
-  trades = data.trades;
+  const data = await loadDataFromHyperliquid(ACCOUNT);
+
+  atoms = data.trades.map(tradeToAtom);
+
+  console.log("ATOM SAMPLE:", atoms[0]);
 
   let minT = Infinity;
-  for(const t of trades) minT = Math.min(minT, t.exit_time);
+  for(const a of atoms){
+    minT = Math.min(minT, a.exit_time);
+  }
 
   const start = dayFloorUTC(minT);
   const end   = dayFloorUTC(Date.now());
 
-  for(let d=start; d<=end; d+=DAY) days.push(d);
-  dayIndex = days.length-1;
+  for(let d = start; d <= end; d += DAY){
+    days.push(d);
+  }
 
+  dayIndex = days.length - 1;
   dateEl.textContent = new Date(days[dayIndex]).toDateString();
+
   render();
 })();
 </script>
