@@ -1,35 +1,34 @@
 // Single data gateway via Cloudflare Worker
-const HL = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
+// All data now comes from YOUR backend, not Hyperliquid directly
 
-async function post(body) {
-  const r = await fetch(HL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+const WORKER = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
+
+/*
+  Load fills from worker storage
+*/
+async function getFills(account) {
+  const r = await fetch(
+    `${WORKER}/fills?account=${account}&limit=500`
+  );
 
   if (!r.ok) {
-    throw new Error("Hyperliquid proxy error");
+    throw new Error("Worker fills fetch failed");
   }
 
-  return r.json();
-}
-
-async function getFills(account) {
-  return post({
-    type: "userFills",
-    user: account
-  });
+  const j = await r.json();
+  return j.fills || [];
 }
 
 /*
   Atomic trade = entry -> exit
+  Strict alternation per symbol
   No partial fill inference
 */
 function groupFills(fills) {
   const trades = [];
   const open = {};
 
+  // chronological order
   fills.sort((a, b) => a.time - b.time);
 
   for (const f of fills) {
@@ -45,6 +44,7 @@ function groupFills(fills) {
 
     const o = open[sym];
 
+    // opposite side closes trade
     if (o.side !== side) {
       trades.push({
         entry_time: o.t,
@@ -61,7 +61,14 @@ function groupFills(fills) {
   return trades;
 }
 
-// New public API: return both raw fills and aggregated trades
+/*
+  Public API for UI
+  Returns:
+  {
+    fills: [...],
+    trades: [...]
+  }
+*/
 export async function loadDataFromHyperliquid(account) {
   const fills = await getFills(account);
   const trades = groupFills(fills);
