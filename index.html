@@ -42,10 +42,9 @@ canvas{display:block;touch-action:none}
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
-import { loadDataFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
+const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const DAY = 86400000;
 const SWIPE_PX = 50;
 
@@ -68,151 +67,100 @@ function resize(){
 addEventListener("resize",resize);
 resize();
 
-let fills=[], trades=[], days=[], dayIndex=0;
-let efficiency={limitTime:null};
-let arrowValue=0, frozen=false;
-let dailyEquity=[];
+let trades = [];
+let days = [];
+let dayIndex = 0;
+
+let efficiency = { limitTime:null };
+let arrowValue = 0;
+let frozen = false;
 
 let startX=null, currentX=null, isDown=false;
 
-dateEl.textContent="Loading…";
+dateEl.textContent = "Loading…";
 
-/* ===== HELPERS ===== */
 function dayFloorUTC(t){
   const d = new Date(t);
   d.setUTCHours(0,0,0,0);
   return d.getTime();
 }
 
-async function loadDailyEquity(){
-  const r = await fetch(`${API}/equity/daily`);
-  const j = await r.json();
-  return j.equity || [];
+// ---------- group fills into atomic trades ----------
+function groupFills(fills){
+  const trades = [];
+  const open = {};
+
+  for(const f of fills){
+    const sym = f.coin;
+    const side = f.side;
+    const px = Number(f.px);
+    const t = f.time;
+
+    if(!open[sym]){
+      open[sym] = { side, t, px };
+      continue;
+    }
+
+    const o = open[sym];
+    if(o.side !== side){
+      trades.push({
+        entry_time: o.t,
+        exit_time: t,
+        dir: o.side === "B" ? 1 : -1
+      });
+      open[sym] = null;
+    }
+  }
+  return trades;
 }
 
-/* ===== INIT ===== */
+// ---------- load trades for one day ----------
+async function loadDayTrades(dayTs){
+  const day = new Date(dayTs).toISOString().slice(0,10);
+  const r = await fetch(`${API}/day/trades?day=${day}`);
+  const j = await r.json();
+  return groupFills(j.fills || []);
+}
+
 async function init(){
-  const data = await loadDataFromHyperliquid(ACCOUNT);
-  fills = data.fills;
-  trades = data.trades;
-
-  dailyEquity = await loadDailyEquity();
-
-  if(!fills.length){
-    dateEl.textContent="No data";
-    return;
+  const today = dayFloorUTC(Date.now());
+  for(let d=today-30*DAY; d<=today; d+=DAY){
+    days.push(d);
   }
-
-  let minT = Infinity;
-  for(const f of fills) minT = Math.min(minT, f.time);
-
-  const startDay = dayFloorUTC(minT);
-  const endDay   = dayFloorUTC(Date.now());
-
-  days=[];
-  for(let d=startDay; d<=endDay; d+=DAY) days.push(d);
   dayIndex = days.length - 1;
+  await updateDay();
+}
+
+async function updateDay(){
+  trades = await loadDayTrades(days[dayIndex]);
 
   const exits = trades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exits);
 
-  let B=0;
+  frozen = false;
+  let B = 0;
   for(const t of trades){
-    if(efficiency.limitTime && t.exit_time>efficiency.limitTime){
-      frozen=true;
+    if(efficiency.limitTime && t.exit_time > efficiency.limitTime){
+      frozen = true;
       break;
     }
-    const hold=(t.exit_time-t.entry_time)/60000;
-    B+=Math.max(-1,Math.min(1,hold-160));
+    const hold = (t.exit_time - t.entry_time)/60000;
+    B += Math.max(-1, Math.min(1, hold - 160));
   }
-  arrowValue=Math.max(-1,Math.min(1,B/12));
+  arrowValue = Math.max(-1, Math.min(1, B/12));
 
-  updateDate();
-}
-await init();
-
-/* ===== UI ===== */
-function updateDate(){
   dateEl.textContent = new Date(days[dayIndex]).toDateString();
 }
 
-function tradesForDay(){
-  const d0=days[dayIndex];
-  const d1=d0+DAY;
-  return trades.filter(t=>t.entry_time<d1 && t.exit_time>d0);
-}
+await init();
 
-function timeToX(t){
-  return ((t-days[dayIndex])/DAY)*W;
-}
-
-/* ===== DRAW ===== */
-function drawAtom(x,y,t){
-  ctx.strokeStyle="#2DBE60";
-  ctx.beginPath();
-  ctx.moveTo(x+1,y);
-  ctx.lineTo(x+1,y+(t.dir<0?160:-160));
-  ctx.stroke();
-
-  const h=(t.exit_time-t.entry_time)/60000;
-  ctx.strokeStyle="#2F6BFF";
-  ctx.beginPath();
-  ctx.moveTo(x-1,y);
-  ctx.lineTo(x-1,y+(t.dir<0?h:-h));
-  ctx.stroke();
-
-  ctx.fillStyle="#000";
-  ctx.fillRect(x-1,y-1,2,2);
-}
-
-/* ===== DAILY EQUITY DRAW ===== */
-function drawDailyEquity(){
-  if(!dailyEquity.length) return;
-
-  const map = {};
-  for(const e of dailyEquity) map[e.day]=e.equity;
-
-  const values = days
-    .map(d=>map[new Date(d).toISOString().slice(0,10)])
-    .filter(v=>typeof v==="number");
-
-  if(values.length<2) return;
-
-  const min=Math.min(...values);
-  const max=Math.max(...values);
-  if(max===min) return;
-
-  const top=H*0.12;
-  const bot=H*0.32;
-
-  ctx.save();
-  ctx.strokeStyle="rgba(0,0,0,.55)";
-  ctx.lineWidth=1.25;
-  ctx.beginPath();
-
-  let started=false;
-  for(let i=0;i<=dayIndex;i++){
-    const d=new Date(days[i]).toISOString().slice(0,10);
-    const v=map[d];
-    if(typeof v!=="number") continue;
-
-    const x=(i/(days.length-1))*W;
-    const y=bot-((v-min)/(max-min))*(bot-top);
-
-    if(!started){ctx.moveTo(x,y);started=true;}
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-/* ===== INPUT ===== */
+// ---------- input ----------
 function endSwipe(){
-  const dx=currentX-startX;
-  if(Math.abs(dx)>SWIPE_PX){
-    if(dx>0) dayIndex=Math.max(0,dayIndex-1);
-    else dayIndex=Math.min(days.length-1,dayIndex+1);
-    updateDate();
+  const dx = currentX - startX;
+  if(Math.abs(dx) > SWIPE_PX){
+    if(dx > 0) dayIndex = Math.max(0, dayIndex-1);
+    else dayIndex = Math.min(days.length-1, dayIndex+1);
+    updateDay();
   }
   isDown=false;
   startX=currentX=null;
@@ -238,13 +186,20 @@ canvas.addEventListener("pointermove",e=>{
   updateTime(Math.max(0,Math.min(W,currentX)));
 });
 canvas.addEventListener("pointerup",()=>{ if(isDown) endSwipe(); });
-canvas.addEventListener("pointercancel",()=>{ if(isDown) endSwipe(); });
 
-/* ===== RENDER ===== */
+// ---------- draw ----------
+function drawAtom(x,y,t){
+  ctx.strokeStyle="#2DBE60";
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x,y+(t.dir<0?160:-160));
+  ctx.stroke();
+}
+
 function render(){
   ctx.clearRect(0,0,W,H);
 
-  const d0=days[dayIndex];
+  const d0 = days[dayIndex];
   drawEfficiencyLayer(ctx,{
     dayStart:d0,
     dayEnd:d0+DAY,
@@ -253,11 +208,10 @@ function render(){
     height:H
   });
 
-  drawDailyEquity();
-
-  const baseY=H*0.55;
-  for(const t of tradesForDay()){
-    drawAtom(timeToX(t.entry_time),baseY,t);
+  const baseY = H*0.55;
+  for(const t of trades){
+    const x = ((t.entry_time - d0)/DAY)*W;
+    drawAtom(x, baseY, t);
   }
 
   drawBehaviorArrow(ctx,{
