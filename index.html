@@ -27,127 +27,98 @@ canvas{display:block}
 <div id="date"></div>
 
 <script type="module">
-import { loadDataFromHyperliquid } from "./trades_from_hyperliquid.js";
-
+const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
+const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const DAY = 86400000;
-const ACCOUNT = "ACCOUNT";
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
 
-let W = 0, H = 0;
-
+let W=0,H=0;
 function resize(){
   const dpr = devicePixelRatio || 1;
   W = innerWidth;
   H = innerHeight;
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
-  canvas.style.width = W + "px";
-  canvas.style.height = H + "px";
+  canvas.width = W*dpr;
+  canvas.height = H*dpr;
+  canvas.style.width = W+"px";
+  canvas.style.height = H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-addEventListener("resize", resize);
+addEventListener("resize",resize);
 resize();
 
-let atoms = [];
-let days = [];
-let dayIndex = 0;
+// -------------------- DATA --------------------
 
-function dayFloorUTC(t){
-  const d = new Date(t);
-  d.setUTCHours(0,0,0,0);
-  return d.getTime();
-}
+async function loadAllFills(){
+  let all = [];
+  let before = Date.now();
 
-function atomsForDay(d0){
-  const d1 = d0 + DAY;
-  return atoms.filter(a => a.exit_time >= d0 && a.exit_time < d1);
-}
-
-function computeDayScale(dayAtoms){
-  let maxAbs = 0;
-  for(const a of dayAtoms){
-    maxAbs = Math.max(
-      maxAbs,
-      Math.abs(a.HOLD_price),
-      Math.abs(a.MARKET_price)
+  while(true){
+    const r = await fetch(
+      `${API}/fills?account=${ACCOUNT}&before=${before}&limit=500`
     );
+    const j = await r.json();
+    if(!j.fills || !j.fills.length) break;
+
+    all.push(...j.fills);
+    before = j.fills[j.fills.length-1].time;
+    if(j.fills.length < 500) break;
   }
-  return maxAbs || 1;
+
+  return all;
 }
 
-function drawAtom(a, d0, scale){
-  const x = ((a.exit_time - d0) / DAY) * W;
-  const y = H * 0.55;
+function groupFillsToTrades(fills){
+  fills.sort((a,b)=>a.time-b.time);
+  const open = {};
+  const trades = [];
 
-  if(a.liquidated){
-    ctx.strokeStyle = "#D10000";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x-6,y-6); ctx.lineTo(x+6,y+6);
-    ctx.moveTo(x-6,y+6); ctx.lineTo(x+6,y-6);
-    ctx.stroke();
-    return;
+  for(const f of fills){
+    const sym = f.coin;
+    if(!open[sym]){
+      open[sym] = f;
+      continue;
+    }
+    const o = open[sym];
+    if(o.side !== f.side){
+      trades.push({
+        entry_time: o.time,
+        exit_time: f.time,
+        entry_price: Number(o.px),
+        exit_price: Number(f.px),
+        side: o.side
+      });
+      open[sym] = null;
+    }
   }
-
-  const ATOM_H = 160;
-  const EPS = 6;
-
-  const blueLen  = Math.max(Math.abs(a.HOLD_price)   / scale * ATOM_H, EPS);
-  const greenLen = Math.abs(a.MARKET_price) / scale * ATOM_H;
-
-  const dirBlue  = a.side === "B" ? -1 : 1;
-  const dirGreen = Math.sign(a.MARKET_price);
-
-  ctx.lineWidth = 1.5;
-
-  ctx.strokeStyle = "#2F6BFF";
-  ctx.beginPath();
-  ctx.moveTo(x,y);
-  ctx.lineTo(x,y + dirBlue * blueLen);
-  ctx.stroke();
-
-  if(greenLen > 0){
-    ctx.strokeStyle = "#2DBE60";
-    ctx.beginPath();
-    ctx.moveTo(x,y);
-    ctx.lineTo(x,y + dirGreen * greenLen);
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = "#000";
-  ctx.fillRect(x-2,y-2,4,4);
+  return trades;
 }
 
-function render(){
-  ctx.clearRect(0,0,W,H);
-
-  const d0 = days[dayIndex];
-  const dayAtoms = atomsForDay(d0);
-  const scale = computeDayScale(dayAtoms);
-
-  for(const a of dayAtoms){
-    drawAtom(a, d0, scale);
-  }
-
-  requestAnimationFrame(render);
-}
-
-function tradeToAtom(t){
+function tradeToAtom(t, fills){
   const HOLD_price =
     t.side === "B"
       ? t.exit_price - t.entry_price
       : t.entry_price - t.exit_price;
 
-  const dUp   = t.market_max - t.exit_price;
-  const dDown = t.market_min - t.exit_price;
+  const W8 = 8 * 60 * 60 * 1000;
+  let max = t.exit_price;
+  let min = t.exit_price;
+
+  for(const f of fills){
+    if(f.time <= t.exit_time) continue;
+    if(f.time > t.exit_time + W8) break;
+    const px = Number(f.px);
+    max = Math.max(max, px);
+    min = Math.min(min, px);
+  }
+
+  const dUp = max - t.exit_price;
+  const dDown = min - t.exit_price;
 
   const MARKET_price =
-    Math.abs(dUp) >= Math.abs(dDown)
-      ? dUp
-      : dDown;
+    Math.abs(dUp) >= Math.abs(dDown) ? dUp : dDown;
 
   return {
     exit_time: t.exit_time,
@@ -158,26 +129,101 @@ function tradeToAtom(t){
   };
 }
 
+// -------------------- TIME --------------------
+
+function dayFloorUTC(t){
+  const d = new Date(t);
+  d.setUTCHours(0,0,0,0);
+  return d.getTime();
+}
+
+let atoms = [];
+let days = [];
+let dayIndex = 0;
+
+// -------------------- DRAW --------------------
+
+function atomsForDay(d0){
+  const d1 = d0 + DAY;
+  return atoms.filter(a =>
+    a.exit_time >= d0 && a.exit_time < d1
+  );
+}
+
+function computeDayScale(list){
+  let m = 0;
+  for(const a of list){
+    m = Math.max(m, Math.abs(a.HOLD_price), Math.abs(a.MARKET_price));
+  }
+  return m || 1;
+}
+
+function drawAtom(a, d0, scale){
+  const x = ((a.exit_time - d0)/DAY)*W;
+  const y = H*0.55;
+
+  const ATOM_H = 160;
+  const EPS = 8;
+
+  const blueLen  = Math.max(Math.abs(a.HOLD_price)/scale*ATOM_H, EPS);
+  const greenLen = Math.abs(a.MARKET_price)/scale*ATOM_H;
+
+  const dirBlue  = a.side==="B" ? -1 : 1;
+  const dirGreen = Math.sign(a.MARKET_price);
+
+  ctx.strokeStyle="#2F6BFF";
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x,y+dirBlue*blueLen);
+  ctx.stroke();
+
+  if(greenLen>0){
+    ctx.strokeStyle="#2DBE60";
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x,y+dirGreen*greenLen);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle="#000";
+  ctx.fillRect(x-2,y-2,4,4);
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+
+  const d0 = days[dayIndex];
+  const list = atomsForDay(d0);
+  const scale = computeDayScale(list);
+
+  for(const a of list){
+    drawAtom(a,d0,scale);
+  }
+
+  requestAnimationFrame(render);
+}
+
+// -------------------- INIT --------------------
+
 (async ()=>{
-  const data = await loadDataFromHyperliquid(ACCOUNT);
+  const fills = await loadAllFills();
+  const trades = groupFillsToTrades(fills);
+  atoms = trades.map(t => tradeToAtom(t, fills));
 
-  atoms = data.trades.map(tradeToAtom);
-
-  console.log("ATOM SAMPLE:", atoms[0]);
+  console.log("ATOMS TODAY:",
+    atoms.filter(a =>
+      a.exit_time >= dayFloorUTC(Date.now())
+    ).length
+  );
 
   let minT = Infinity;
-  for(const a of atoms){
-    minT = Math.min(minT, a.exit_time);
-  }
+  for(const a of atoms) minT = Math.min(minT, a.exit_time);
 
   const start = dayFloorUTC(minT);
   const end   = dayFloorUTC(Date.now());
+  for(let d=start; d<=end; d+=DAY) days.push(d);
 
-  for(let d = start; d <= end; d += DAY){
-    days.push(d);
-  }
-
-  dayIndex = days.length - 1;
+  dayIndex = days.length-1;
   dateEl.textContent = new Date(days[dayIndex]).toDateString();
 
   render();
