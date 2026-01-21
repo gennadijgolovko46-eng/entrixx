@@ -1,41 +1,12 @@
+// trades_from_hyperliquid.js
+
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
-// сколько максимум строк тянуть (чтобы не убить память)
-const MAX_FILLS = 20000;
-// размер страницы на воркере (у тебя лимит <= 500)
-const PAGE_LIMIT = 500;
-
-async function fetchFillsPage(account, before) {
-  const u = new URL(`${API}/fills`);
-  u.searchParams.set("account", account);
-  u.searchParams.set("limit", String(PAGE_LIMIT));
-  if (before != null) u.searchParams.set("before", String(before));
-
-  const r = await fetch(u.toString());
-  if (!r.ok) throw new Error("fills fetch failed");
-  return await r.json();
-}
-
 async function getFills(account) {
-  const out = [];
-  let before = Date.now();
-
-  while (out.length < MAX_FILLS) {
-    const j = await fetchFillsPage(account, before);
-    const page = j.fills || [];
-    if (!page.length) break;
-
-    out.push(...page);
-
-    // воркер уже возвращает next_before
-    const nb = j.next_before;
-    if (!nb) break;
-
-    // следующий запрос берём строго раньше
-    before = nb - 1;
-  }
-
-  return out;
+  const r = await fetch(`${API}/fills?account=${account}&limit=1000`);
+  if (!r.ok) throw new Error("fills fetch failed");
+  const j = await r.json();
+  return j.fills || [];
 }
 
 function groupFills(fills) {
@@ -57,9 +28,9 @@ function groupFills(fills) {
 
     const o = open[sym];
 
-    // закрытие при смене стороны
-    if (o.side !== side) {
+    if (o && o.side !== side) {
       trades.push({
+        coin: sym,
         entry_time: o.t,
         exit_time: t,
         entry_price: o.px,
