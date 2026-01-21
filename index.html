@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,19 +30,16 @@ canvas{display:block;touch-action:none}
   color:rgba(0,0,0,.9);
   opacity:0;
   pointer-events:none;
-  white-space:nowrap;
 }
 #debug{
   position:fixed;
   top:10px;
   left:10px;
-  width:260px;
-  padding:10px 12px;
-  border:1px solid rgba(0,0,0,.12);
-  border-radius:12px;
-  background:rgba(255,255,255,.92);
-  font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.75);
+  font:12px monospace;
+  background:#fff;
+  padding:8px;
+  border-radius:6px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.1);
 }
 </style>
 </head>
@@ -52,27 +48,16 @@ canvas{display:block;touch-action:none}
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
-<div id="debug" style="display:none"></div>
+<div id="debug"></div>
 
 <script type="module">
-import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
-import { drawBehaviorArrow } from "./behaviorArrow.js";
 import { loadDataFromHyperliquid } from "./trades_from_hyperliquid.js";
 
 const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const DAY = 86400000;
-const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
+const SWIPE_PX = 50;
+const MARKET_WINDOW = 8 * 60 * 60 * 1000;
 
-const HOLD_SCALE_MIN_PER_PX = 2.0;      // 2 minutes = 1px
-const HOLD_MIN_PX = 8;                  // always visible
-const HOLD_MAX_PX = 160;
-
-const MARKET_MAX_PX = 160;
-const MARKET_PCT_PER_PX = 0.0025;       // 0.25% = 1px (tune)
-
-const SHOW_DEBUG = true;
-
-// ---------------- canvas ----------------
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
@@ -93,28 +78,19 @@ function resize(){
 addEventListener("resize",resize);
 resize();
 
-// ---------------- state ----------------
-let fills = [];
 let trades = [];
-let fillIndex = new Map(); // coin -> [{time, px}, ...]
-
 let days = [];
 let dayIndex = 0;
 
-let efficiency = { limitTime:null };
-let arrowValue = 0;
-let frozen = false;
+let startX=null, currentX=null, isDown=false;
 
-let currentX=null, isDown=false;
-
-// ---------------- utils ----------------
 function dayFloorUTC(t){
   const d = new Date(t);
   d.setUTCHours(0,0,0,0);
   return d.getTime();
 }
 
-function formatTimeUTC(t){
+function formatTime(t){
   const d = new Date(t);
   return String(d.getUTCHours()).padStart(2,"0")+":"+
          String(d.getUTCMinutes()).padStart(2,"0");
@@ -128,85 +104,9 @@ function tradesForDay(d0){
   );
 }
 
-function buildFillIndex(fillsArr){
-  const m = new Map();
-  for(const f of fillsArr){
-    const coin = f.coin;
-    const px = Number(f.px);
-    const time = Number(f.time);
-    if(!Number.isFinite(px) || !Number.isFinite(time)) continue;
-    if(!m.has(coin)) m.set(coin, []);
-    m.get(coin).push({ time, px });
-  }
-  for(const [coin, arr] of m){
-    arr.sort((a,b)=>a.time-b.time);
-  }
-  return m;
-}
-
-function lowerBound(arr, t){
-  let lo=0, hi=arr.length;
-  while(lo<hi){
-    const mid=(lo+hi)>>1;
-    if(arr[mid].time < t) lo=mid+1;
-    else hi=mid;
-  }
-  return lo;
-}
-
-/*
-Market tail per canon:
-- window: 8h after exit_time
-- direction: based on max absolute move from exit_price in that window
-- length: proportional to that max move (pct), can be 0 (no tail)
-*/
-function computeMarketTail(trade){
-  const arr = fillIndex.get(trade.coin);
-  if(!arr || arr.length === 0) return { dir:0, pxLen:0 };
-
-  const t0 = trade.exit_time;
-  const t1 = trade.exit_time + MARKET_WINDOW_MS;
-  const exitPx = trade.exit_price;
-
-  if(!Number.isFinite(exitPx) || exitPx <= 0) return { dir:0, pxLen:0 };
-
-  const i0 = lowerBound(arr, t0 + 1);
-  const i1 = lowerBound(arr, t1 + 1);
-  if(i1 <= i0) return { dir:0, pxLen:0 };
-
-  let bestAbs = 0;
-  let bestSign = 0;
-
-  for(let i=i0; i<i1; i++){
-    const px = arr[i].px;
-    const d = px - exitPx;
-    const ad = Math.abs(d);
-    if(ad > bestAbs){
-      bestAbs = ad;
-      bestSign = Math.sign(d);
-    }
-  }
-
-  const pct = bestAbs / exitPx;
-  if(pct <= 0) return { dir:0, pxLen:0 };
-
-  const pxLen = Math.min(MARKET_MAX_PX, pct / MARKET_PCT_PER_PX);
-  return { dir: bestSign, pxLen };
-}
-
-function computeHoldPx(trade){
-  const holdMin = (trade.exit_time - trade.entry_time)/60000;
-  const pxLen = Math.max(HOLD_MIN_PX, Math.min(HOLD_MAX_PX, holdMin / HOLD_SCALE_MIN_PER_PX));
-  return pxLen;
-}
-
-// ---------------- init ----------------
 async function init(){
   const data = await loadDataFromHyperliquid(ACCOUNT);
-  fills = data.fills;
   trades = data.trades;
-
-  fillIndex = buildFillIndex(fills);
 
   if(!trades.length){
     dateEl.textContent = "No data";
@@ -219,143 +119,105 @@ async function init(){
   const startDay = dayFloorUTC(minT);
   const endDay   = dayFloorUTC(Date.now());
 
-  days = [];
   for(let d=startDay; d<=endDay; d+=DAY) days.push(d);
+  dayIndex = days.length - 1;
 
-  dayIndex = days.length - 1; // latest day
   updateDay();
 }
 await init();
 
-// ---------------- per-day recompute ----------------
-function computeBehavior(dayTrades, eff){
-  let v = 0;
-  for(const t of dayTrades){
-    if(eff.limitTime && t.exit_time > eff.limitTime) break;
-    const hold = (t.exit_time - t.entry_time)/60000;
-    v += Math.max(-1, Math.min(1, hold - 160));
-  }
-  return Math.max(-1, Math.min(1, v/12));
-}
+let dayTrades = [];
 
 function updateDay(){
   const d0 = days[dayIndex];
-  const dayTrades = tradesForDay(d0);
-
-  const exits = dayTrades.map(t=>t.exit_time).sort((a,b)=>a-b);
-  efficiency = computeEfficiency(exits);
-
-  arrowValue = computeBehavior(dayTrades, efficiency);
-  frozen = !!efficiency.limitTime;
-
+  dayTrades = tradesForDay(d0);
   dateEl.textContent = new Date(d0).toDateString();
 
-  if(SHOW_DEBUG){
-    debugEl.style.display = "block";
-    debugEl.textContent =
-      "DEBUG\n" +
-      "fills total: " + fills.length + "\n" +
-      "trades total: " + trades.length + "\n" +
-      "days total: " + days.length + "\n" +
-      "dayIndex: " + dayIndex + "\n" +
-      "dayTrades: " + dayTrades.length + "\n" +
-      "limitTime: " + (efficiency.limitTime ?? "null");
-  }
+  debugEl.innerHTML =
+    "trades total: "+trades.length+"<br>"+
+    "days total: "+days.length+"<br>"+
+    "dayIndex: "+dayIndex+"<br>"+
+    "dayTrades: "+dayTrades.length;
 }
 
-// ---------------- input (no day swipe) ----------------
 canvas.addEventListener("pointerdown",e=>{
   isDown=true;
-  currentX=e.clientX;
+  startX=currentX=e.clientX;
   timeEl.style.opacity=1;
 });
 
 canvas.addEventListener("pointermove",e=>{
-  if(!isDown) return;
   currentX=e.clientX;
   const x=Math.max(0,Math.min(W,currentX));
   const t=days[dayIndex]+(x/W)*DAY;
-  timeEl.textContent=formatTimeUTC(t);
+  timeEl.textContent=formatTime(t);
   timeEl.style.left=x+"px";
 });
 
 canvas.addEventListener("pointerup",()=>{
+  if(!isDown) return;
+  const dx=currentX-startX;
+  if(Math.abs(dx)>SWIPE_PX){
+    if(dx>0 && dayIndex>0) dayIndex--;
+    if(dx<0 && dayIndex<days.length-1) dayIndex++;
+    updateDay();
+  }
   isDown=false;
-  currentX=null;
+  startX=currentX=null;
   timeEl.style.opacity=0;
 });
 
-// ---------------- drawing ----------------
-function drawAtom(trade, d0){
-  const y = H * 0.55;
+function drawAtom(t, d0){
+  const d1 = d0 + DAY;
 
-  // anchor time = exit_time (canon: both tails exist at same time)
-  const x = ((trade.exit_time - d0) / DAY) * W;
+  const x = ((t.exit_time-d0)/DAY)*W;
+  const y = H*0.55;
 
-  // black dot
-  ctx.fillStyle = "#000";
+  const holdMin = Math.max(1,(t.exit_time - t.entry_time)/60000);
+  const holdPx = Math.min(160, holdMin);
+  const dir = t.dir;
+
+  const marketDir = t.marketDir || 0;
+  const marketPx = t.marketPx || 0;
+
+  ctx.fillStyle="#000";
   ctx.beginPath();
-  ctx.arc(x, y, 3, 0, Math.PI*2);
+  ctx.arc(x,y,3,0,Math.PI*2);
   ctx.fill();
 
-  // blue tail = HOLD (you)
-  const holdPx = computeHoldPx(trade);
-  ctx.strokeStyle = "#2F6BFF";
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle="#2F6BFF";
+  ctx.lineWidth=1.8;
   ctx.beginPath();
-  ctx.moveTo(x+0.5, y);
-  ctx.lineTo(x+0.5, y + trade.dir * holdPx);
+  ctx.moveTo(x+1.5,y);
+  ctx.lineTo(x+1.5,y+dir*holdPx);
   ctx.stroke();
 
-  // green tail = MARKET (after exit, 8h)
-  const m = computeMarketTail(trade);
-  if(m.pxLen > 0 && m.dir !== 0){
-    ctx.strokeStyle = "#2DBE60";
-    ctx.lineWidth = 1.5;
+  if(marketPx>0){
+    ctx.strokeStyle="#2DBE60";
+    ctx.lineWidth=1.2;
     ctx.beginPath();
-    ctx.moveTo(x-0.5, y);
-    ctx.lineTo(x-0.5, y + m.dir * m.pxLen);
+    ctx.moveTo(x-1.5,y);
+    ctx.lineTo(x-1.5,y+marketDir*marketPx);
     ctx.stroke();
   }
 }
 
 function render(){
   ctx.clearRect(0,0,W,H);
-
   const d0 = days[dayIndex];
 
-  drawEfficiencyLayer(ctx,{
-    dayStart:d0,
-    dayEnd:d0+DAY,
-    limitTime:efficiency.limitTime,
-    width:W,
-    height:H
-  });
-
-  const dayTrades = tradesForDay(d0);
-
-  // stop drawing after efficiency break (freeze)
   for(const t of dayTrades){
-    if(efficiency.limitTime && t.exit_time > efficiency.limitTime) break;
-    drawAtom(t, d0);
+    drawAtom(t,d0);
   }
 
   if(currentX!==null){
     const x=Math.max(0,Math.min(W,currentX));
     ctx.strokeStyle="rgba(0,0,0,.35)";
-    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x+0.5,0);
     ctx.lineTo(x+0.5,H);
     ctx.stroke();
   }
-
-  drawBehaviorArrow(ctx,{
-    value:arrowValue,
-    frozen,
-    width:W,
-    height:H
-  });
 
   requestAnimationFrame(render);
 }
