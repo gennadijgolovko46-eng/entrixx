@@ -105,6 +105,9 @@ async function init(){
   const data = await loadDataFromHyperliquid(ACCOUNT);
   trades = data.trades;
 
+  // --- DIAGNOSTIC ---
+  console.log("FRONT fills:", data.fills.length);
+
   if(!trades.length){
     dateEl.textContent = "No data";
     return;
