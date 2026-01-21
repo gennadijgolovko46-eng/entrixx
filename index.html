@@ -1,3 +1,5 @@
+<!-- index.html -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,18 +33,6 @@ canvas{display:block;touch-action:none}
   opacity:0;
   pointer-events:none;
 }
-#debug{
-  position:fixed;
-  top:14px;
-  left:14px;
-  font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.85);
-  background:rgba(255,255,255,.9);
-  border:1px solid rgba(0,0,0,.12);
-  border-radius:10px;
-  padding:10px 12px;
-  white-space:pre;
-}
 </style>
 </head>
 
@@ -50,7 +40,6 @@ canvas{display:block;touch-action:none}
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
-<div id="debug"></div>
 
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
@@ -66,7 +55,6 @@ const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
 const timeEl = document.getElementById("time");
-const debugEl = document.getElementById("debug");
 
 let W=0,H=0;
 function resize(){
@@ -92,6 +80,9 @@ let arrowValue = 0;
 let frozen = false;
 
 let startX=null, currentX=null, isDown=false;
+
+// fills index (market tails)
+let fillsByCoin = {};
 
 // ---------------- utils ----------------
 function dayFloorUTC(t){
@@ -119,9 +110,17 @@ async function init(){
   const data = await loadDataFromHyperliquid(ACCOUNT);
   trades = data.trades;
 
+  const fills = data.fills || [];
+  fills.sort((a,b)=>a.time-b.time);
+  fillsByCoin = {};
+  for(const f of fills){
+    const c = f.coin;
+    if(!fillsByCoin[c]) fillsByCoin[c] = [];
+    fillsByCoin[c].push(f);
+  }
+
   if(!trades.length){
     dateEl.textContent = "No data";
-    debugEl.textContent = "DEBUG\nNo trades";
     return;
   }
 
@@ -160,14 +159,6 @@ function updateDay(){
   frozen = !!efficiency.limitTime;
 
   dateEl.textContent = new Date(d0).toDateString();
-
-  debugEl.textContent =
-    "DEBUG\n" +
-    "trades total: " + trades.length + "\n" +
-    "days total: " + days.length + "\n" +
-    "dayIndex: " + dayIndex + "\n" +
-    "dayTrades: " + dayTrades.length + "\n" +
-    "limitTime: " + (efficiency.limitTime ?? "null");
 }
 
 // ---------------- input ----------------
@@ -206,37 +197,68 @@ function drawAtom(t, d0){
   const xExit  = ((Math.min(t.exit_time,  d1) - d0) / DAY) * W;
 
   const y0 = H * 0.55;
-  const dir = t.dir;
 
-  // BLUE (HOLD): vertical only
+  // BLUE (HOLD) : vertical only
   const holdMin = (t.exit_time - t.entry_time) / 60000;
-  const blueLen = Math.max(2, Math.min(160, holdMin));
+  const blueLen = Math.max(8, Math.min(160, holdMin));
+  const blueDir = t.dir === 1 ? -1 : 1; // long up, short down (screen y inverted)
 
   ctx.strokeStyle="#2F6BFF";
   ctx.beginPath();
-  ctx.moveTo(xEntry + 0.5, y0);
-  ctx.lineTo(xEntry + 0.5, y0 + dir * blueLen);
+  ctx.moveTo(xEntry+0.5, y0);
+  ctx.lineTo(xEntry+0.5, y0 + blueDir * blueLen);
   ctx.stroke();
 
-  // GREEN (MARKET): placeholder (next step will compute 8h move)
-  const greenLen = 0;
+  // CORE DOTS (entry + exit)
+  ctx.fillStyle="#000";
+  ctx.beginPath();
+  ctx.arc(xEntry+0.5, y0, 2.2, 0, Math.PI*2);
+  ctx.fill();
 
-  if(greenLen !== 0 && t.exit_time>=d0 && t.exit_time<=d1){
-    ctx.strokeStyle="#2DBE60";
-    ctx.beginPath();
-    ctx.moveTo(xExit + 0.5, y0);
-    ctx.lineTo(xExit + 0.5, y0 + greenLen);
-    ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(xExit+0.5, y0, 2.2, 0, Math.PI*2);
+  ctx.fill();
+
+  // GREEN (MARKET) : 8h after exit, vertical only, independent of trade dir
+  if(t.exit_time>=d0 && t.exit_time<=d1){
+    const WINDOW_MS = 8*60*60*1000;
+    const endT = t.exit_time + WINDOW_MS;
+
+    const coinFills = fillsByCoin[t.coin] || [];
+
+    let p0 = t.exit_price;
+    if(!Number.isFinite(p0)) p0 = t.entry_price;
+
+    let maxUp = 0;
+    let maxDn = 0;
+
+    for(const f of coinFills){
+      if(f.time <= t.exit_time) continue;
+      if(f.time > endT) break;
+      const p = Number(f.px);
+      if(!Number.isFinite(p) || !Number.isFinite(p0) || p0<=0) continue;
+      const r = (p - p0) / p0;
+      if(r > maxUp) maxUp = r;
+      if(r < maxDn) maxDn = r;
+    }
+
+    const move = Math.abs(maxUp) >= Math.abs(maxDn) ? maxUp : maxDn; // signed
+    const SCALE = 800; // 1% => 8px
+    const greenLen = Math.max(0, Math.min(220, Math.abs(move) * SCALE));
+
+    if(greenLen > 0.5){
+      const greenDir = move >= 0 ? -1 : 1; // up if market up
+      ctx.strokeStyle="#2DBE60";
+      ctx.beginPath();
+      ctx.moveTo(xExit+0.5, y0);
+      ctx.lineTo(xExit+0.5, y0 + greenDir * greenLen);
+      ctx.stroke();
+    }
   }
 }
 
 function render(){
   ctx.clearRect(0,0,W,H);
-
-  if(!days.length){
-    requestAnimationFrame(render);
-    return;
-  }
 
   const d0 = days[dayIndex];
 
