@@ -1,3 +1,5 @@
+// trades_from_hyperliquid.js
+
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
 /*
@@ -6,19 +8,11 @@ const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
   Worker is the single source of truth.
 */
 async function loadTrades() {
-  const r = await fetch(`${API}/trades`, {
-    method: "GET"
-  });
-
-  if (!r.ok) {
-    throw new Error("trades fetch failed");
-  }
+  const r = await fetch(`${API}/trades`, { method: "GET" });
+  if (!r.ok) throw new Error("trades fetch failed");
 
   const j = await r.json();
-
-  if (j && Array.isArray(j.trades)) {
-    return j.trades;
-  }
+  if (j && Array.isArray(j.trades)) return j.trades;
 
   return [];
 }
@@ -31,8 +25,5 @@ async function loadTrades() {
 */
 export async function loadDataFromHyperliquid(account) {
   const trades = await loadTrades();
-  return {
-    fills: [],
-    trades
-  };
+  return { fills: [], trades };
 }
