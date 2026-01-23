@@ -1,7 +1,6 @@
 // trades_from_hyperliquid.js
 
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
-const DEFAULT_WINDOW_MS = 8 * 60 * 60 * 1000; // 8h
 
 function num(x) {
   const v = Number(x);
@@ -19,59 +18,42 @@ async function loadTrades(account) {
   return (j && Array.isArray(j.trades)) ? j.trades : [];
 }
 
-async function fetchMarketWindow(coin, exitTime, cache, windowMs = DEFAULT_WINDOW_MS) {
-  const key = `${coin}:${exitTime}:${windowMs}`;
-  const cached = cache.get(key);
-  if (cached) return cached;
-
-  try {
-    const r = await fetch(
-      `${API}/market_window?coin=${encodeURIComponent(coin)}&t=${exitTime}&windowMs=${windowMs}`
-    );
-    if (!r.ok) return null;
-
-    const j = await r.json();
-    const v = { hi: num(j.hi), lo: num(j.lo) };
-    cache.set(key, v);
-    return v;
-  } catch (_) {
-    return null;
-  }
-}
-
 async function attachMarketExtremes(trades) {
-  const cache = new Map();
-  const out = trades.map(t => ({ ...t, mkt_up: NaN, mkt_dn: NaN }));
+  const cache = new Map(); // key = `${coin}:${exit_time}` -> {hi,lo}
+  const out = [];
 
-  // build tasks
-  const tasks = [];
-  for (let i = 0; i < out.length; i++) {
-    const t = out[i];
+  for (const t of trades) {
     const coin = String(t.coin || "").trim();
     const exitTime = num(t.exit_time);
-    if (!coin || !Number.isFinite(exitTime)) continue;
 
-    tasks.push({ i, coin, exitTime });
-  }
+    let mkt_up = NaN;
+    let mkt_dn = NaN;
 
-  // limited concurrency
-  const CONCURRENCY = 6;
-  let p = 0;
+    if (coin && Number.isFinite(exitTime)) {
+      const key = `${coin}:${exitTime}`;
+      let v = cache.get(key);
 
-  async function worker() {
-    while (p < tasks.length) {
-      const k = p++;
-      const { i, coin, exitTime } = tasks[k];
-      const v = await fetchMarketWindow(coin, exitTime, cache, DEFAULT_WINDOW_MS);
+      if (!v) {
+        try {
+          const r = await fetch(
+            `${API}/market_window?coin=${encodeURIComponent(coin)}&t=${exitTime}`
+          );
+          if (r.ok) {
+            const j = await r.json();
+            v = { hi: num(j.hi), lo: num(j.lo) };
+            cache.set(key, v);
+          }
+        } catch (_) {}
+      }
+
       if (v) {
-        if (Number.isFinite(v.hi)) out[i].mkt_up = v.hi;
-        if (Number.isFinite(v.lo)) out[i].mkt_dn = v.lo;
+        if (Number.isFinite(v.hi)) mkt_up = v.hi;
+        if (Number.isFinite(v.lo)) mkt_dn = v.lo;
       }
     }
-  }
 
-  const runners = Array.from({ length: Math.min(CONCURRENCY, tasks.length) }, worker);
-  await Promise.all(runners);
+    out.push({ ...t, mkt_up, mkt_dn });
+  }
 
   return out;
 }
