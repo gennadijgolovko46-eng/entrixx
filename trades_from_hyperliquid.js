@@ -2,23 +2,26 @@
 
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
-async function loadTrades() {
-  const r = await fetch(`${API}/trades`);
-  if (!r.ok) throw new Error("trades fetch failed");
-  const j = await r.json();
-  return (j && Array.isArray(j.trades)) ? j.trades : [];
-}
-
 function num(x) {
   const v = Number(x);
   return Number.isFinite(v) ? v : NaN;
 }
 
-async function attachMarketExtremes(trades) {
-  // In-memory cache per session to avoid repeating calls
-  const cache = new Map(); // key = `${coin}:${exit_time}` -> {hi,lo}
+async function loadTrades(account) {
+  const acc = String(account || "").trim();
+  if (!acc) return [];
 
+  const r = await fetch(`${API}/trades?account=${encodeURIComponent(acc)}`);
+  if (!r.ok) throw new Error("trades fetch failed");
+
+  const j = await r.json();
+  return (j && Array.isArray(j.trades)) ? j.trades : [];
+}
+
+async function attachMarketExtremes(trades) {
+  const cache = new Map(); // key = `${coin}:${exit_time}` -> {hi,lo}
   const out = [];
+
   for (const t of trades) {
     const coin = String(t.coin || "").trim();
     const exitTime = num(t.exit_time);
@@ -56,7 +59,7 @@ async function attachMarketExtremes(trades) {
 }
 
 export async function loadDataFromHyperliquid(account) {
-  const trades = await loadTrades();
+  const trades = await loadTrades(account);
   const withMarket = await attachMarketExtremes(trades);
 
   return {
