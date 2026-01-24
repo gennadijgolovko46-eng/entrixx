@@ -196,18 +196,14 @@ function formatPct(p){
 /* =========================
    FIX #107: safe label
    - If coin is not a normal ticker, show "Market: #id"
-   - Keep everything else the same
    ========================= */
 function isTickerLike(s){
-  // allow common tickers: BTC, ETH, PAXG, HYPE, etc.
-  // reject numeric ids or weird forms.
   if(!s) return false;
   const t = String(s).trim();
   if(!t) return false;
   if(/^\d+$/.test(t)) return false;        // pure number
   if(/^@\d+$/.test(t)) return false;       // @107
   if(!/^[A-Z0-9._:-]{2,15}$/.test(t)) return false;
-  // must contain at least one letter to avoid "107"
   return /[A-Z]/.test(t);
 }
 
@@ -215,7 +211,6 @@ function coinLabel(t){
   const raw = String(t.coin || "").trim();
   if(isTickerLike(raw)) return { label: "Coin", value: raw };
 
-  // try to extract numeric market id from "@107" or "107"
   const m = raw.match(/@?(\d+)/);
   if(m) return { label: "Market", value: `#${m[1]}` };
 
@@ -335,7 +330,7 @@ function markFlipOpen(dayTrades){
     (Number(a.exit_time)  - Number(b.exit_time))
   );
 
-  const EPS_T = 0.5; // ms tolerance
+  const EPS_T = 0.5;
   const EPS_P = 1e-9;
 
   for(let i=1;i<dayTrades.length;i++){
@@ -366,29 +361,53 @@ function markFlipOpen(dayTrades){
   }
 }
 
-// pick by (X,Y) distance to atom point
+/* ==========================================
+   SELECTION FIX (NO ARCH CHANGES)
+   - drawAtom() stores exact draw coordinates:
+       t._px = xExit; t._py = y; t._dayKey = d0;
+   - pickNearestAtom() uses those coordinates when available,
+     so tap selects exactly what was drawn (1:1).
+   Safe fallbacks keep old behavior if coords are missing.
+   ========================================== */
+function dayKeyOfCurrent(){
+  return days.length ? days[dayIndex] : 0;
+}
+
 function pickNearestAtom(xClient, yClient){
   if(!days.length) return null;
-  const d0 = days[dayIndex];
+  const d0 = dayKeyOfCurrent();
   const dayTrades = tradesForDay(d0);
   if(!dayTrades.length) return null;
-
-  const yAtom = H * 0.55;
 
   let best = null;
   let bestDist = Infinity;
 
   for(const t of dayTrades){
-    const exit = Number(t.exit_time);
-    if(!Number.isFinite(exit)) continue;
+    // prefer stored draw coords (truth)
+    const hasPxPy =
+      Number.isFinite(t._px) &&
+      Number.isFinite(t._py) &&
+      t._dayKey === d0;
 
-    const baseX = ((clamp(d0, exit, d0 + DAY) - d0) / DAY) * W;
-    const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
+    let dx, dy;
 
-    const dx = xClient - xExit;
-    const dy = yClient - yAtom;
+    if(hasPxPy){
+      dx = xClient - t._px;
+      dy = yClient - t._py;
+    } else {
+      // safe fallback (old method)
+      const exit = Number(t.exit_time);
+      if(!Number.isFinite(exit)) continue;
+
+      const yAtom = H * 0.55;
+      const baseX = ((clamp(d0, exit, d0 + DAY) - d0) / DAY) * W;
+      const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
+
+      dx = xClient - xExit;
+      dy = yClient - yAtom;
+    }
+
     const dist = Math.hypot(dx, dy);
-
     if(dist < bestDist){
       bestDist = dist;
       best = t;
@@ -460,6 +479,7 @@ function updateDay(){
 
   dateEl.textContent = new Date(d0).toDateString();
 
+  // if selected atom is not in this day -> drop it
   if(selectedAtom){
     const inDay = (Number(selectedAtom.exit_time) > d0) && (Number(selectedAtom.entry_time) < d0 + DAY);
     if(!inDay) selectedAtom = null;
@@ -494,7 +514,7 @@ canvas.addEventListener("pointerup",(e)=>{
 
   const dx = currentX - startX;
 
-  // tap: select atom
+  // tap: select atom (uses stored draw coords when available)
   if(Math.abs(dx) <= TAP_MAX_DX){
     selectedAtom = pickNearestAtom(currentX, e.clientY);
     updateDetailsPanel();
@@ -534,6 +554,11 @@ function drawAtom(t, d0){
 
   const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
+
+  // store exact draw coordinates (truth for selection)
+  t._px = xExit;
+  t._py = y;
+  t._dayKey = d0;
 
   // selected ring (subtle)
   if(selectedAtom === t){
