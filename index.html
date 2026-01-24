@@ -193,6 +193,35 @@ function formatPct(p){
   return (p * 100).toFixed(3) + "%";
 }
 
+/* =========================
+   FIX #107: safe label
+   - If coin is not a normal ticker, show "Market: #id"
+   - Keep everything else the same
+   ========================= */
+function isTickerLike(s){
+  // allow common tickers: BTC, ETH, PAXG, HYPE, etc.
+  // reject numeric ids or weird forms.
+  if(!s) return false;
+  const t = String(s).trim();
+  if(!t) return false;
+  if(/^\d+$/.test(t)) return false;        // pure number
+  if(/^@\d+$/.test(t)) return false;       // @107
+  if(!/^[A-Z0-9._:-]{2,15}$/.test(t)) return false;
+  // must contain at least one letter to avoid "107"
+  return /[A-Z]/.test(t);
+}
+
+function coinLabel(t){
+  const raw = String(t.coin || "").trim();
+  if(isTickerLike(raw)) return { label: "Coin", value: raw };
+
+  // try to extract numeric market id from "@107" or "107"
+  const m = raw.match(/@?(\d+)/);
+  if(m) return { label: "Market", value: `#${m[1]}` };
+
+  return { label: "Market", value: "n/a" };
+}
+
 async function fetchMarketWindow(coin, exitTime){
   const key = `${coin}|${exitTime}`;
   if (marketCache.has(key)) return marketCache.get(key);
@@ -255,7 +284,6 @@ async function hydrateMarketForDay(dayTrades){
       if (Number.isFinite(hi)) t.mkt_up = hi;
       if (Number.isFinite(lo)) t.mkt_dn = lo;
 
-      // if this trade is selected, refresh panel when data arrives
       if (selectedAtom === t) updateDetailsPanel();
     }
   } finally {
@@ -380,7 +408,7 @@ function updateDetailsPanel(){
     return;
   }
 
-  const coin = String(selectedAtom.coin || "").trim() || "n/a";
+  const { label, value } = coinLabel(selectedAtom);
   const dir = (Number(selectedAtom.dir) === -1) ? "SHORT" : "LONG";
 
   const entryT = num(selectedAtom.entry_time);
@@ -391,7 +419,7 @@ function updateDetailsPanel(){
   const marketLine = Number.isFinite(mp) ? `Market move: ${formatPct(mp)}` : "Market move: ...";
 
   const lines = [
-    `Coin: ${coin}`,
+    `${label}: ${value}`,
     `Direction: ${dir}`,
     `Hold: ${hold}`,
     marketLine
@@ -432,7 +460,6 @@ function updateDay(){
 
   dateEl.textContent = new Date(d0).toDateString();
 
-  // if selected atom is not in this day -> drop it
   if(selectedAtom){
     const inDay = (Number(selectedAtom.exit_time) > d0) && (Number(selectedAtom.entry_time) < d0 + DAY);
     if(!inDay) selectedAtom = null;
@@ -478,7 +505,6 @@ canvas.addEventListener("pointerup",(e)=>{
     if(dx>0 && dayIndex>0) dayIndex--;
     if(dx<0 && dayIndex<days.length-1) dayIndex++;
 
-    // reset selection on day change
     selectedAtom = null;
     selectedDetailsText = "";
 
