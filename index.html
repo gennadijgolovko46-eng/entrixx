@@ -6,74 +6,22 @@
 <title>ENTRIXX</title>
 
 <style>
-html,body{
-  margin:0;
-  padding:0;
-  background:#fff;
-  overflow:hidden;
-}
+html,body{margin:0;padding:0;background:#fff;overflow:hidden}
 canvas{display:block;touch-action:none}
-
-#date{
-  position:fixed;
-  bottom:14px;
-  left:50%;
-  transform:translateX(-50%);
-  font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.45);
-}
-
-#time{
-  position:fixed;
-  top:8px;
-  left:50%;
-  transform:translateX(-50%);
-  font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.9);
-  opacity:0;
-  pointer-events:none;
-}
-
-/* compact details panel */
+#date{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);font:12px system-ui,sans-serif;color:rgba(0,0,0,.45)}
+#time{position:fixed;top:8px;left:50%;transform:translateX(-50%);font:12px system-ui,sans-serif;color:rgba(0,0,0,.9);opacity:0;pointer-events:none}
 #details{
-  position:fixed;
-  top:10px;
-  left:10px;
-  max-width:320px;
-  padding:10px 12px;
-  border-radius:12px;
-  background:rgba(255,255,255,.86);
-  border:1px solid rgba(0,0,0,.08);
-  box-shadow:0 6px 18px rgba(0,0,0,.06);
-  font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.78);
-  line-height:1.25;
-  white-space:pre;
-  pointer-events:none;
-  opacity:0;
-  transform:translateY(-4px);
-  transition:opacity .14s ease, transform .14s ease;
+  position:fixed;top:10px;left:10px;max-width:360px;padding:10px 12px;border-radius:12px;
+  background:rgba(255,255,255,.92);border:1px solid rgba(0,0,0,.08);box-shadow:0 6px 18px rgba(0,0,0,.06);
+  font:12px system-ui,sans-serif;color:rgba(0,0,0,.78);line-height:1.25;white-space:pre-wrap;
+  pointer-events:none;opacity:0;transform:translateY(-4px);transition:opacity .14s ease, transform .14s ease;
 }
-#details.show{
-  opacity:1;
-  transform:translateY(0);
-}
-
-/* keep debug in code, hidden by default */
-.hidden{ display:none !important; }
+#details.show{opacity:1;transform:translateY(0)}
+.hidden{display:none!important}
 #debug{
-  position:fixed;
-  top:10px;
-  left:10px;
-  max-width:320px;
-  padding:10px 12px;
-  border-radius:10px;
-  background:rgba(255,255,255,.85);
-  border:1px solid rgba(0,0,0,.08);
-  font:12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  color:rgba(0,0,0,.75);
-  white-space:pre;
-  pointer-events:none;
+  position:fixed;top:10px;left:10px;max-width:360px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.85);
+  border:1px solid rgba(0,0,0,.08);font:12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  color:rgba(0,0,0,.75);white-space:pre;pointer-events:none
 }
 </style>
 </head>
@@ -85,10 +33,43 @@ canvas{display:block;touch-action:none}
 <div id="details"></div>
 <div id="debug" class="hidden"></div>
 
+<script>
+(function(){
+  const detailsEl = document.getElementById("details");
+  function show(title, msg){
+    detailsEl.textContent = title + "\n\n" + msg;
+    detailsEl.classList.add("show");
+  }
+  window.__show = show;
+  window.addEventListener("error", (e)=>show("JS ERROR", (e?.error?.stack || e?.message || String(e))));
+  window.addEventListener("unhandledrejection", (e)=>show("UNHANDLED PROMISE", (e?.reason?.stack || e?.reason?.message || String(e?.reason || e))));
+})();
+</script>
+
 <script type="module">
-import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
-import { drawBehaviorArrow } from "./behaviorArrow.js";
-import { loadDataFromHyperliquid } from "./trades_from_hyperliquid.js";
+/* ВАЖНО: этот вариант НЕ дает белого экрана.
+   Если модуль не грузится — ты увидишь точный файл/причину в details. */
+
+const V = "idx-revert-1"; // меняй при деплое, чтобы обновить модули
+
+async function safeImport(path){
+  try{
+    return await import(path + "?v=" + encodeURIComponent(V));
+  }catch(e){
+    window.__show("IMPORT FAILED", `File:\n${path}\n\nError:\n${String(e?.message || e)}\n\nЧасто это значит 404 или вместо JS пришел HTML (Unexpected token <).`);
+    throw e;
+  }
+}
+
+const eff = await safeImport("./efficiency.js");
+const beh = await safeImport("./behaviorArrow.js");
+const hl  = await safeImport("./trades_from_hyperliquid.js");
+
+const { computeEfficiency, drawEfficiencyLayer } = eff;
+const { drawBehaviorArrow } = beh;
+const { loadDataFromHyperliquid } = hl;
+
+/* ===== твой рабочий код дальше почти 1:1 ===== */
 
 const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const DAY = 86400000;
@@ -98,15 +79,12 @@ const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
 
 const FLIP_SHIFT_PX = 10;
-
-// tap selection
-const TAP_MAX_DX = 8;   // px
-const HIT_R = 28;       // px hit radius
+const TAP_MAX_DX = 8;
+const HIT_R = 28;
 
 let selectedAtom = null;
 let selectedDetailsText = "";
 
-// ---------------- canvas ----------------
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
@@ -117,23 +95,18 @@ const debugEl = document.getElementById("debug");
 let W=0,H=0;
 function resize(){
   const dpr = devicePixelRatio || 1;
-  W = innerWidth;
-  H = innerHeight;
-  canvas.width = W*dpr;
-  canvas.height = H*dpr;
-  canvas.style.width=W+"px";
-  canvas.style.height=H+"px";
+  W = innerWidth; H = innerHeight;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.width=W+"px"; canvas.style.height=H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 addEventListener("resize",resize);
 resize();
 
-// ---------------- state ----------------
 let trades = [];
 let fills = [];
 let days = [];
 let dayIndex = 0;
-
 let currentDayTrades = [];
 
 let efficiency = { limitTime:null };
@@ -142,39 +115,19 @@ let frozen = false;
 
 let startX=null, currentX=null, isDown=false;
 
-// cache market window results: key = coin|exit_time
 const marketCache = new Map();
 let marketLoading = false;
 
-// ---------------- utils ----------------
-function dayFloorUTC(t){
-  const d = new Date(t);
-  d.setUTCHours(0,0,0,0);
-  return d.getTime();
-}
-
-function clamp(min,v,max){
-  return Math.max(min, Math.min(max, v));
-}
-
-function num(x){
-  const v = Number(x);
-  return Number.isFinite(v) ? v : NaN;
-}
-
-// seconds/ms normalization (CRITICAL)
-function toMs(v){
-  const n = Number(v);
-  if(!Number.isFinite(n)) return NaN;
-  return (n > 0 && n < 1e12) ? n * 1000 : n;
-}
+function dayFloorUTC(t){ const d=new Date(t); d.setUTCHours(0,0,0,0); return d.getTime(); }
+function clamp(min,v,max){ return Math.max(min, Math.min(max, v)); }
+function num(x){ const v=Number(x); return Number.isFinite(v)?v:NaN; }
+function toMs(v){ const n=Number(v); if(!Number.isFinite(n)) return NaN; return (n>0 && n<1e12)?n*1000:n; }
 
 function formatTime(t){
   const d = new Date(t);
   return String(d.getUTCHours()).padStart(2,"0")+":"+
          String(d.getUTCMinutes()).padStart(2,"0");
 }
-
 function formatDateTimeUTC(t){
   const d = new Date(t);
   const Y = d.getUTCFullYear();
@@ -184,7 +137,6 @@ function formatDateTimeUTC(t){
   const mm = String(d.getUTCMinutes()).padStart(2,"0");
   return `${Y}-${M}-${D} ${hh}:${mm}Z`;
 }
-
 function formatHold(ms){
   if(!Number.isFinite(ms) || ms < 0) return "n/a";
   const mins = Math.round(ms / 60000);
@@ -193,16 +145,8 @@ function formatHold(ms){
   const m = mins % 60;
   return m ? `${h}h ${m}m` : `${h}h`;
 }
+function formatPct(p){ if(!Number.isFinite(p)) return "n/a"; return (p*100).toFixed(3)+"%"; }
 
-function formatPct(p){
-  if(!Number.isFinite(p)) return "n/a";
-  return (p * 100).toFixed(3) + "%";
-}
-
-/* =========================
-   FIX #107: safe label
-   - If coin is not a normal ticker, show "Market: #id"
-   ========================= */
 function isTickerLike(s){
   if(!s) return false;
   const t = String(s).trim();
@@ -212,18 +156,14 @@ function isTickerLike(s){
   if(!/^[A-Z0-9._:-]{2,15}$/.test(t)) return false;
   return /[A-Z]/.test(t);
 }
-
 function coinLabel(t){
   const raw = String(t.coin || "").trim();
-  if(isTickerLike(raw)) return { label: "Coin", value: raw };
-
+  if(isTickerLike(raw)) return { label:"Coin", value:raw };
   const m = raw.match(/@?(\d+)/);
-  if(m) return { label: "Market", value: `#${m[1]}` };
-
-  return { label: "Market", value: "n/a" };
+  if(m) return { label:"Market", value:`#${m[1]}` };
+  return { label:"Market", value:"n/a" };
 }
 
-// STRICT RULE: atom = closed trade (full hold)
 function holdMsAtom(t){
   const entry = toMs(t.entry_time);
   const exit  = toMs(t.exit_time);
@@ -234,19 +174,15 @@ function holdMsAtom(t){
 
 function tradesForDay(d0){
   const d1 = d0 + DAY;
-  return trades.filter(t =>
-    toMs(t.exit_time) > d0 &&
-    toMs(t.entry_time) < d1
-  );
+  return trades.filter(t => toMs(t.exit_time) > d0 && toMs(t.entry_time) < d1);
 }
 
-// ---------------- market window ----------------
 async function fetchMarketWindow(coin, exitTimeMs){
   const key = `${coin}|${exitTimeMs}`;
   if (marketCache.has(key)) return marketCache.get(key);
 
   const url = `${API}/market_window?coin=${encodeURIComponent(coin)}&t=${Number(exitTimeMs)}&windowMs=${MARKET_WINDOW_MS}`;
-  const r = await fetch(url, { method: "GET" });
+  const r = await fetch(url, { method:"GET" });
 
   if (!r.ok) {
     const bad = { hi: NaN, lo: NaN };
@@ -255,9 +191,7 @@ async function fetchMarketWindow(coin, exitTimeMs){
   }
 
   const j = await r.json();
-  const hi = num(j && j.hi);
-  const lo = num(j && j.lo);
-  const res = { hi, lo };
+  const res = { hi: num(j && j.hi), lo: num(j && j.lo) };
   marketCache.set(key, res);
   return res;
 }
@@ -295,10 +229,7 @@ async function hydrateMarketForDay(dayTrades){
       if (!has && !hasFields) need.push(t);
     }
 
-    const batch = need.slice(0, 40);
-
-    // safe sequential (as you wanted)
-    for (const t of batch) {
+    for (const t of need.slice(0,40)) {
       const coin = String(t.coin || "").trim();
       const exitTimeMs = toMs(t.exit_time);
       if (!coin || !Number.isFinite(exitTimeMs)) continue;
@@ -314,14 +245,24 @@ async function hydrateMarketForDay(dayTrades){
   }
 }
 
-// ---------------- init ----------------
 async function init(){
-  const data = await loadDataFromHyperliquid(ACCOUNT);
+  let data;
+  try{
+    data = await loadDataFromHyperliquid(ACCOUNT);
+  }catch(e){
+    dateEl.textContent = "Load error";
+    detailsEl.textContent = String(e?.message || e);
+    detailsEl.classList.add("show");
+    throw e;
+  }
+
   trades = data.trades || [];
-  fills = data.fills || [];
+  fills  = data.fills  || [];
 
   if(!trades.length){
     dateEl.textContent = "No data";
+    detailsEl.textContent = "No trades returned.";
+    detailsEl.classList.add("show");
     return;
   }
 
@@ -338,16 +279,12 @@ async function init(){
 }
 await init();
 
-// ---------------- per-day recompute ----------------
 function computeBehavior(dayTrades, eff){
   let v = 0;
   for(const t of dayTrades){
     if(eff.limitTime && toMs(t.exit_time) > eff.limitTime) break;
-
-    // behavior uses FULL atom hold (strict rule)
     const holdMs = holdMsAtom(t);
-    const holdMin = Number.isFinite(holdMs) ? (holdMs / 60000) : 0;
-
+    const holdMin = Number.isFinite(holdMs) ? (holdMs/60000) : 0;
     v += Math.max(-1, Math.min(1, holdMin - 160));
   }
   return Math.max(-1, Math.min(1, v/12));
@@ -361,7 +298,7 @@ function markFlipOpen(dayTrades){
     (toMs(a.exit_time)  - toMs(b.exit_time))
   );
 
-  const EPS_T = 2;      // ms tolerance
+  const EPS_T = 2;
   const EPS_P = 1e-9;
 
   for(let i=1;i<dayTrades.length;i++){
@@ -376,8 +313,7 @@ function markFlipOpen(dayTrades){
 
     if(!Number.isFinite(prevExitT) || !Number.isFinite(curEntryT)) continue;
 
-    const timeMatch = Math.abs(prevExitT - curEntryT) <= EPS_T;
-    if(!timeMatch) continue;
+    if(Math.abs(prevExitT - curEntryT) > EPS_T) continue;
 
     const priceMatch =
       Number.isFinite(prevExitPx) && Number.isFinite(curEntryPx)
@@ -386,15 +322,11 @@ function markFlipOpen(dayTrades){
 
     const dirFlip = (Number(prev.dir) === -Number(cur.dir));
 
-    if(priceMatch && dirFlip){
-      cur._flipOpen = true;
-    }
+    if(priceMatch && dirFlip) cur._flipOpen = true;
   }
 }
 
-function dayKeyOfCurrent(){
-  return days.length ? days[dayIndex] : 0;
-}
+function dayKeyOfCurrent(){ return days.length ? days[dayIndex] : 0; }
 
 function pickNearestAtom(xClient, yClient){
   if(!days.length) return null;
@@ -406,40 +338,29 @@ function pickNearestAtom(xClient, yClient){
   let bestDist = Infinity;
 
   for(const t of dayTrades){
-    const hasPxPy =
-      Number.isFinite(t._px) &&
-      Number.isFinite(t._py) &&
-      t._dayKey === d0;
+    const hasPxPy = Number.isFinite(t._px) && Number.isFinite(t._py) && t._dayKey === d0;
 
     let dx, dy;
-
     if(hasPxPy){
       dx = xClient - t._px;
       dy = yClient - t._py;
     } else {
       const exit = toMs(t.exit_time);
       if(!Number.isFinite(exit)) continue;
-
       const yAtom = H * 0.55;
       const baseX = ((clamp(d0, exit, d0 + DAY) - d0) / DAY) * W;
       const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
-
       dx = xClient - xExit;
       dy = yClient - yAtom;
     }
 
     const dist = Math.hypot(dx, dy);
-    if(dist < bestDist){
-      bestDist = dist;
-      best = t;
-    }
+    if(dist < bestDist){ bestDist = dist; best = t; }
   }
 
-  if(best && bestDist <= HIT_R) return best;
-  return null;
+  return (best && bestDist <= HIT_R) ? best : null;
 }
 
-// ---- details panel ----
 function updateDetailsPanel(){
   if(!selectedAtom){
     selectedDetailsText = "";
@@ -460,7 +381,6 @@ function updateDetailsPanel(){
   const mp = marketMovePct(selectedAtom);
   const marketLine = Number.isFinite(mp) ? `Market move: ${formatPct(mp)}` : "Market move: ...";
 
-  // DIAG: show entry/exit to validate 199h vs 16h
   const lines = [
     `${label}: ${value}`,
     `Direction: ${dir}`,
@@ -471,7 +391,6 @@ function updateDetailsPanel(){
   ];
 
   const text = lines.join("\n");
-
   if(text !== selectedDetailsText){
     selectedDetailsText = text;
     detailsEl.textContent = text;
@@ -481,7 +400,7 @@ function updateDetailsPanel(){
 
 function setBaseDebugText(){
   debugEl.textContent =
-    "fills/trades ok\n"+
+    "ok\n"+
     "fills total: " + fills.length + "\n" +
     "trades total: " + trades.length + "\n" +
     "days total: " + days.length + "\n" +
@@ -505,26 +424,21 @@ function updateDay(){
   dateEl.textContent = new Date(d0).toDateString();
 
   if(selectedAtom){
-    const inDay =
-      (toMs(selectedAtom.exit_time) > d0) &&
-      (toMs(selectedAtom.entry_time) < d0 + DAY);
+    const inDay = (toMs(selectedAtom.exit_time) > d0) && (toMs(selectedAtom.entry_time) < d0 + DAY);
     if(!inDay) selectedAtom = null;
   }
 
   updateDetailsPanel();
   setBaseDebugText();
-
   hydrateMarketForDay(currentDayTrades);
 }
 
-// ---------------- input ----------------
 canvas.addEventListener("pointerdown",e=>{
   if(!days.length) return;
   isDown=true;
   startX=currentX=e.clientX;
   timeEl.style.opacity=1;
 });
-
 canvas.addEventListener("pointermove",e=>{
   if(!days.length) return;
   if(!isDown) return;
@@ -534,7 +448,6 @@ canvas.addEventListener("pointermove",e=>{
   timeEl.textContent=formatTime(t);
   timeEl.style.left=x+"px";
 });
-
 canvas.addEventListener("pointerup",(e)=>{
   if(!isDown) return;
 
@@ -548,10 +461,8 @@ canvas.addEventListener("pointerup",(e)=>{
   if(Math.abs(dx)>SWIPE_PX){
     if(dx>0 && dayIndex>0) dayIndex--;
     if(dx<0 && dayIndex<days.length-1) dayIndex++;
-
     selectedAtom = null;
     selectedDetailsText = "";
-
     updateDay();
   }
 
@@ -559,14 +470,12 @@ canvas.addEventListener("pointerup",(e)=>{
   startX=currentX=null;
   timeEl.style.opacity=0;
 });
-
 canvas.addEventListener("pointercancel",()=>{
   isDown=false;
   startX=currentX=null;
   timeEl.style.opacity=0;
 });
 
-// ---------------- drawing ----------------
 function drawAtom(t, d0){
   const d1 = d0 + DAY;
 
@@ -579,13 +488,7 @@ function drawAtom(t, d0){
   const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
-  // store exact draw coordinates (truth for selection)
-  t._px = xExit;
-  t._py = y;
-  t._dayKey = d0;
-
-  // store full atom hold (strict rule)
-  t._localHoldMs = exit - entry;
+  t._px = xExit; t._py = y; t._dayKey = d0;
 
   if(selectedAtom === t){
     ctx.strokeStyle = "rgba(0,0,0,.16)";
@@ -641,11 +544,7 @@ function drawAtom(t, d0){
 
 function render(){
   ctx.clearRect(0,0,W,H);
-
-  if(!days.length){
-    requestAnimationFrame(render);
-    return;
-  }
+  if(!days.length){ requestAnimationFrame(render); return; }
 
   const d0 = days[dayIndex];
 
@@ -668,17 +567,10 @@ function render(){
     ctx.stroke();
   }
 
-  drawBehaviorArrow(ctx,{
-    value:arrowValue,
-    frozen,
-    width:W,
-    height:H
-  });
-
+  drawBehaviorArrow(ctx,{ value:arrowValue, frozen, width:W, height:H });
   requestAnimationFrame(render);
 }
 render();
 </script>
 </body>
 </html>
-```0
