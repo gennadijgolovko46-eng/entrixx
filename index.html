@@ -309,7 +309,7 @@ function marketMetrics(t){
   return { exitPrice, hi, lo, movePct, greenLen, upMoveRaw, dnMoveRaw };
 }
 
-// ✅ SAFEST FIX: pick by (X,Y) distance to the atom point (not just X)
+// pick by (X,Y) distance to atom point
 function pickNearestAtom(xClient, yClient){
   if(!days.length) return null;
   const d0 = days[dayIndex];
@@ -475,6 +475,11 @@ canvas.addEventListener("pointerup",(e)=>{
   if(Math.abs(dx)>SWIPE_PX){
     if(dx>0 && dayIndex>0) dayIndex--;
     if(dx<0 && dayIndex<days.length-1) dayIndex++;
+
+    // ✅ FIX: reset selection on day change (no “yesterday atom still selected”)
+    selectedAtom = null;
+    selectedDebugText = "";
+
     updateDay();
   }
 
@@ -505,7 +510,7 @@ function drawAtom(t, d0){
   // shift ONLY if this atom is flip-open
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
-  // ---- optional: highlight selected atom (UI only) ----
+  // ---- highlight selected atom (UI only) ----
   if(selectedAtom === t){
     ctx.strokeStyle = "rgba(0,0,0,.25)";
     ctx.lineWidth = 6;
@@ -521,7 +526,7 @@ function drawAtom(t, d0){
   ctx.arc(xExit, y, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // BLUE tail (HOLD): vertical, direction by trade dir, length by hold duration
+  // BLUE tail (HOLD)
   const dirBlue = (t.dir === -1 ? -1 : 1);
   const holdMin = Math.max(0, (exit - entry) / 60000);
   const blueLen = clamp(8, holdMin, 160);
@@ -533,7 +538,7 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
-  // GREEN tail (MARKET): window after exit, direction by market move, length by max move
+  // GREEN tail (MARKET)
   const exitPx = Number(t.exit_price);
   const mUp = Number(t.mkt_up);
   const mDn = Number(t.mkt_dn);
@@ -549,7 +554,6 @@ function drawAtom(t, d0){
       const movePct = move / exitPx;
       const greenLen = clamp(6, movePct * 4000, 160);
 
-      // x offset to distinguish tails when aligned
       const xG = xExit + 4;
 
       ctx.strokeStyle = "#2DBE60";
