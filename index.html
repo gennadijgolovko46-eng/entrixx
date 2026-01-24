@@ -103,6 +103,10 @@ let startX=null, currentX=null, isDown=false;
 const marketCache = new Map();
 let marketLoading = false;
 
+// === NEW: micro X shift map for flip-open atoms ===
+const sameTimeXShift = new Map();
+const MICRO_SHIFT_PX = 3;
+
 // ---------------- utils ----------------
 function dayFloorUTC(t){
   const d = new Date(t);
@@ -138,15 +142,13 @@ async function fetchMarketWindow(coin, exitTime){
   if (marketCache.has(key)) return marketCache.get(key);
 
   const url = `${API}/market_window?coin=${encodeURIComponent(coin)}&t=${Number(exitTime)}&windowMs=${MARKET_WINDOW_MS}`;
-  const r = await fetch(url, { method: "GET" });
+  const r = await fetch(url);
   if (!r.ok) {
     marketCache.set(key, { hi: NaN, lo: NaN });
     return { hi: NaN, lo: NaN };
   }
   const j = await r.json();
-  const hi = num(j && j.hi);
-  const lo = num(j && j.lo);
-  const res = { hi, lo };
+  const res = { hi: num(j.hi), lo: num(j.lo) };
   marketCache.set(key, res);
   return res;
 }
@@ -156,7 +158,6 @@ async function hydrateMarketForDay(dayTrades){
   marketLoading = true;
 
   try {
-    // limit per update to avoid spamming worker/HL
     const need = [];
     for (const t of dayTrades) {
       const coin = String(t.coin || "").trim();
@@ -164,19 +165,11 @@ async function hydrateMarketForDay(dayTrades){
       if (!coin || !Number.isFinite(exitTime)) continue;
 
       const key = `${coin}|${exitTime}`;
-      const has = marketCache.has(key);
-      const hasFields = Number.isFinite(num(t.mkt_up)) || Number.isFinite(num(t.mkt_dn));
-      if (!has && !hasFields) need.push(t);
+      if (!marketCache.has(key)) need.push(t);
     }
 
-    const batch = need.slice(0, 40);
-
-    for (const t of batch) {
-      const coin = String(t.coin || "").trim();
-      const exitTime = num(t.exit_time);
-      if (!coin || !Number.isFinite(exitTime)) continue;
-
-      const { hi, lo } = await fetchMarketWindow(coin, exitTime);
+    for (const t of need.slice(0,40)) {
+      const { hi, lo } = await fetchMarketWindow(t.coin, t.exit_time);
       if (Number.isFinite(hi)) t.mkt_up = hi;
       if (Number.isFinite(lo)) t.mkt_dn = lo;
     }
@@ -197,7 +190,7 @@ async function init(){
   }
 
   let minT = Infinity;
-  for(const t of trades) minT = Math.min(minT, Number(t.entry_time));
+  for(const t of trades) minT = Math.min(minT, t.entry_time);
 
   const startDay = dayFloorUTC(minT);
   const endDay   = dayFloorUTC(Date.now());
@@ -232,75 +225,31 @@ function updateDay(){
 
   dateEl.textContent = new Date(d0).toDateString();
 
-  debugEl.textContent =
-    "fills/trades ok\n"+
-    "fills total: " + fills.length + "\n" +
-    "trades total: " + trades.length + "\n" +
-    "days total: " + days.length + "\n" +
-    "dayIndex: " + dayIndex + "\n" +
-    "dayTrades: " + dayTrades.length + "\n" +
-    "limitTime: " + (efficiency.limitTime ?? "null");
-
-  // request green tails data for this day (best effort)
   hydrateMarketForDay(dayTrades);
 }
-
-// ---------------- input ----------------
-canvas.addEventListener("pointerdown",e=>{
-  if(!days.length) return;
-  isDown=true;
-  startX=currentX=e.clientX;
-  timeEl.style.opacity=1;
-});
-
-canvas.addEventListener("pointermove",e=>{
-  if(!days.length) return;
-  if(!isDown) return;
-  currentX=e.clientX;
-  const x=Math.max(0,Math.min(W,currentX));
-  const t=days[dayIndex]+(x/W)*DAY;
-  timeEl.textContent=formatTime(t);
-  timeEl.style.left=x+"px";
-});
-
-canvas.addEventListener("pointerup",()=>{
-  if(!isDown) return;
-  const dx=currentX-startX;
-  if(Math.abs(dx)>SWIPE_PX){
-    if(dx>0 && dayIndex>0) dayIndex--;
-    if(dx<0 && dayIndex<days.length-1) dayIndex++;
-    updateDay();
-  }
-  isDown=false;
-  startX=currentX=null;
-  timeEl.style.opacity=0;
-});
-
-canvas.addEventListener("pointercancel",()=>{
-  isDown=false;
-  startX=currentX=null;
-  timeEl.style.opacity=0;
-});
 
 // ---------------- drawing ----------------
 function drawAtom(t, d0){
   const d1 = d0 + DAY;
-
-  const entry = Number(t.entry_time);
-  const exit  = Number(t.exit_time);
-  if(!isFinite(entry) || !isFinite(exit)) return;
+  const entry = t.entry_time;
+  const exit  = t.exit_time;
 
   const y = H * 0.55;
 
-  const xExit = ((clamp(d0, exit, d1) - d0) / DAY) * W;
+  const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
 
-  // atom dot at exit time
+  // === NEW: micro-shift for same-time atoms ===
+  const idx = sameTimeXShift.get(exit) || 0;
+  sameTimeXShift.set(exit, idx + 1);
+  const xExit = baseX + idx * MICRO_SHIFT_PX;
+
+  // atom dot
   ctx.fillStyle = "#000";
   ctx.beginPath();
   ctx.arc(xExit, y, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // BLUE tail (HOLD): vertical, direction by trade dir, length by hold duration
+  // blue tail
   const dirBlue = (t.dir === -1 ? -1 : 1);
   const holdMin = Math.max(0, (exit - entry) / 60000);
   const blueLen = clamp(8, holdMin, 160);
@@ -312,10 +261,10 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
-  // GREEN tail (MARKET): window after exit, direction by market move, length by max move
-  const exitPx = Number(t.exit_price);
-  const mUp = Number(t.mkt_up);
-  const mDn = Number(t.mkt_dn);
+  // green tail
+  const exitPx = t.exit_price;
+  const mUp = t.mkt_up;
+  const mDn = t.mkt_dn;
 
   if(isFinite(exitPx) && (isFinite(mUp) || isFinite(mDn))) {
     const upMove = isFinite(mUp) ? Math.max(0, mUp - exitPx) : 0;
@@ -324,27 +273,21 @@ function drawAtom(t, d0){
 
     if(move > 0) {
       const dirGreen = (upMove >= dnMove) ? 1 : -1;
-
-      const movePct = move / exitPx;
-      const greenLen = clamp(6, movePct * 4000, 160);
-
-      // x offset to distinguish tails when aligned
+      const greenLen = clamp(6, (move / exitPx) * 4000, 160);
       const xG = xExit + 4;
 
       ctx.strokeStyle = "#2DBE60";
-      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(xG, y);
       ctx.lineTo(xG, y + dirGreen * greenLen);
       ctx.stroke();
     }
   }
-
-  ctx.lineWidth = 1;
 }
 
 function render(){
   ctx.clearRect(0,0,W,H);
+  sameTimeXShift.clear(); // reset per frame
 
   if(!days.length){
     requestAnimationFrame(render);
@@ -361,17 +304,7 @@ function render(){
     height:H
   });
 
-  const dayTrades = tradesForDay(d0);
-  for(const t of dayTrades) drawAtom(t,d0);
-
-  if(isDown && currentX!==null){
-    const x=Math.max(0,Math.min(W,currentX));
-    ctx.strokeStyle="rgba(0,0,0,.35)";
-    ctx.beginPath();
-    ctx.moveTo(x+0.5,0);
-    ctx.lineTo(x+0.5,H);
-    ctx.stroke();
-  }
+  for(const t of tradesForDay(d0)) drawAtom(t,d0);
 
   drawBehaviorArrow(ctx,{
     value:arrowValue,
