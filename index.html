@@ -135,7 +135,7 @@ resize();
 
 // ---------------- state ----------------
 let trades = [];
-let fills = []; // kept for debug text only (now always empty)
+let fills = [];
 let days = [];
 let dayIndex = 0;
 
@@ -247,23 +247,32 @@ function tradesForDay(d0){
 /* =========================
    DATA LOADER (FIXED)
    - trades MUST come from worker: scope=coin
-   - /fills removed (optional) to speed load
-   - fetchJson is HARD (no silent null)
    ========================= */
 async function fetchJson(url){
   const r = await fetch(url, { method: "GET" });
-  if(!r.ok){
-    const text = await r.text();
-    throw new Error(`HTTP ${r.status}: ${text.slice(0,200)}`);
-  }
-  return r.json();
+  const text = await r.text();
+  let j = null;
+  try { j = JSON.parse(text); } catch(_){}
+  if(!r.ok) throw new Error(`HTTP ${r.status}: ${text.slice(0,200)}`);
+  return j;
 }
 
 async function loadDataFromWorker(account){
   const tradesUrl = `${API_BASE}/trades?account=${encodeURIComponent(account)}&scope=coin`;
+  const fillsUrl  = `${API_BASE}/fills?account=${encodeURIComponent(account)}&limit=1000`;
+
+  // trades first (required)
   const tj = await fetchJson(tradesUrl);
   const trades = Array.isArray(tj?.trades) ? tj.trades : [];
-  return { trades, fills: [] };
+
+  // fills are optional (debug only)
+  let fills = [];
+  try {
+    const fj = await fetchJson(fillsUrl);
+    fills = Array.isArray(fj?.fills) ? fj.fills : [];
+  } catch(_) {}
+
+  return { trades, fills };
 }
 
 // ---------------- market window ----------------
@@ -358,15 +367,6 @@ async function init(){
     dateEl.textContent = "No trades";
     return;
   }
-
-  // =========================
-  // STABILITY: sort once after load
-  // (exit_time then entry_time)
-  // =========================
-  trades.sort((a,b)=>
-    (toMs(a.exit_time) - toMs(b.exit_time)) ||
-    (toMs(a.entry_time) - toMs(b.entry_time))
-  );
 
   let minT = Infinity;
   for(const t of trades) minT = Math.min(minT, toMs(t.entry_time));
