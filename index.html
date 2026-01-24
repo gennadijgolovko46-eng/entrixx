@@ -67,7 +67,7 @@ canvas{display:block;touch-action:none}
   position:fixed;
   top:10px;
   left:10px;
-  max-width:320px;
+  max-width:360px;
   padding:10px 12px;
   border-radius:10px;
   background:rgba(255,255,255,.85);
@@ -84,10 +84,7 @@ canvas{display:block;touch-action:none}
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
-
 <div id="details"></div>
-
-<!-- debug kept (hidden) -->
 <div id="debug" class="hidden"></div>
 
 <script type="module">
@@ -145,15 +142,30 @@ let frozen = false;
 
 let startX=null, currentX=null, isDown=false;
 
+// pointermove throttle (rAF)
+let pendingMoveX = null;
+let moveRaf = 0;
+
 // cache market window results: key = coin|exit_time
 const marketCache = new Map();
 let marketLoading = false;
+
+// cache day trades to avoid filter each frame
+const dayTradesCache = new Map();
 
 // ---------------- utils ----------------
 function dayFloorUTC(t){
   const d = new Date(t);
   d.setUTCHours(0,0,0,0);
   return d.getTime();
+}
+
+function toMs(v){
+  const n = Number(v);
+  if(!Number.isFinite(n)) return NaN;
+  // if seconds, convert
+  if(n > 0 && n < 1e12) return n * 1000;
+  return n;
 }
 
 function formatTime(t){
@@ -167,11 +179,15 @@ function clamp(min,v,max){
 }
 
 function tradesForDay(d0){
+  if(dayTradesCache.has(d0)) return dayTradesCache.get(d0);
+
   const d1 = d0 + DAY;
-  return trades.filter(t =>
-    t.exit_time > d0 &&
-    t.entry_time < d1
+  const arr = trades.filter(t =>
+    toMs(t.exit_time) > d0 &&
+    toMs(t.entry_time) < d1
   );
+  dayTradesCache.set(d0, arr);
+  return arr;
 }
 
 function num(x){
@@ -199,7 +215,7 @@ function formatPct(p){
    ========================= */
 function isTickerLike(s){
   if(!s) return false;
-  const t = String(s).trim();
+  const t = String(s).trim().toUpperCase();
   if(!t) return false;
   if(/^\d+$/.test(t)) return false;
   if(/^@\d+$/.test(t)) return false;
@@ -209,7 +225,8 @@ function isTickerLike(s){
 
 function coinLabel(t){
   const raw = String(t.coin || "").trim();
-  if(isTickerLike(raw)) return { label: "Coin", value: raw };
+  const up = raw.toUpperCase();
+  if(isTickerLike(up)) return { label: "Coin", value: up };
 
   const m = raw.match(/@?(\d+)/);
   if(m) return { label: "Market", value: `#${m[1]}` };
@@ -217,6 +234,202 @@ function coinLabel(t){
   return { label: "Market", value: "n/a" };
 }
 
+// ---------------- truth from fills (fix 199h) ----------------
+function getFillTimeMs(f){
+  return toMs(f.time ?? f.t ?? f.timestamp ?? f.ts ?? f.fillTime ?? f.createdAt);
+}
+
+function getFillCoin(f){
+  return String(f.coin ?? f.asset ?? f.symbol ?? f.market ?? "").trim();
+}
+
+function getFillPrice(f){
+  return num(f.px ?? f.price ?? f.avgPx ?? f.fillPx);
+}
+
+function getFillSize(f){
+  const n = num(f.sz ?? f.size ?? f.qty ?? f.amount);
+  return Number.isFinite(n) ? Math.abs(n) : NaN;
+}
+
+function getFillSideSign(f){
+  // common: side: "B"/"S", or "BUY"/"SELL"
+  const side = String(f.side ?? f.s ?? f.action ?? "").trim().toUpperCase();
+  if(side === "B" || side === "BUY" || side === "LONG") return 1;
+  if(side === "S" || side === "SELL" || side === "SHORT") return -1;
+
+  // sometimes dir: 1/-1
+  const d = num(f.dir ?? f.direction);
+  if(d === 1 || d === -1) return d;
+
+  // sometimes "isBuyer"
+  if(f.isBuyer === true) return 1;
+  if(f.isBuyer === false) return -1;
+
+  return 0;
+}
+
+function buildTrueAtomsFromFills(fillsArr){
+  const norm = [];
+  for(const f of (fillsArr || [])){
+    const t = getFillTimeMs(f);
+    const sz = getFillSize(f);
+    const sgn = getFillSideSign(f);
+    if(!Number.isFinite(t) || !Number.isFinite(sz) || !sgn) continue;
+
+    norm.push({
+      t,
+      coin: getFillCoin(f),
+      px: getFillPrice(f),
+      signed: sgn * sz
+    });
+  }
+
+  norm.sort((a,b)=>a.t - b.t);
+
+  const atoms = [];
+  let pos = 0;
+  let segStartT = null;
+  let segDir = 0;
+  let segEntryPx = NaN;
+  let segLastCoin = "";
+  let segLastPx = NaN;
+
+  for(const f of norm){
+    const prevPos = pos;
+    const nextPos = prevPos + f.signed;
+
+    if(prevPos === 0){
+      // new segment starts
+      segStartT = f.t;
+      segDir = nextPos > 0 ? 1 : -1;
+      segEntryPx = f.px;
+    }
+
+    pos = nextPos;
+    segLastCoin = f.coin || segLastCoin;
+    segLastPx = f.px;
+
+    if(prevPos !== 0 && pos === 0 && segStartT !== null){
+      atoms.push({
+        entry_time: segStartT,
+        exit_time: f.t,
+        dir: segDir,
+        coin: segLastCoin,
+        entry_price: segEntryPx,
+        exit_price: segLastPx
+      });
+      segStartT = null;
+      segDir = 0;
+      segEntryPx = NaN;
+      segLastCoin = "";
+      segLastPx = NaN;
+    }
+  }
+
+  return atoms;
+}
+
+function indexTrueAtomsByExitTime(atoms){
+  const m = new Map(); // key: exit_time string -> array
+  for(const a of atoms){
+    const k = String(a.exit_time);
+    const arr = m.get(k);
+    if(arr) arr.push(a);
+    else m.set(k, [a]);
+  }
+  return m;
+}
+
+function attachTruthToTrades(tradesArr, fillsArr){
+  const atoms = buildTrueAtomsFromFills(fillsArr);
+  const byExit = indexTrueAtomsByExitTime(atoms);
+
+  const EPS_MS = 2; // tolerate tiny mismatches
+  const keys = Array.from(byExit.keys()).map(k => Number(k)).filter(Number.isFinite).sort((a,b)=>a-b);
+
+  function findClosestExitBucket(exitMs){
+    if(!Number.isFinite(exitMs) || !keys.length) return null;
+    // binary search closest key within EPS_MS
+    let lo = 0, hi = keys.length - 1;
+    while(lo <= hi){
+      const mid = (lo + hi) >> 1;
+      const v = keys[mid];
+      if(v < exitMs) lo = mid + 1;
+      else if(v > exitMs) hi = mid - 1;
+      else return v;
+    }
+    const cand = [];
+    if(hi >= 0) cand.push(keys[hi]);
+    if(lo < keys.length) cand.push(keys[lo]);
+    let bestK = null;
+    let bestD = Infinity;
+    for(const k of cand){
+      const d = Math.abs(k - exitMs);
+      if(d < bestD){
+        bestD = d;
+        bestK = k;
+      }
+    }
+    if(bestK !== null && bestD <= EPS_MS) return bestK;
+    return null;
+  }
+
+  for(const t of (tradesArr || [])){
+    const exitMs = toMs(t.exit_time);
+    if(!Number.isFinite(exitMs)) continue;
+
+    let bucketKey = byExit.has(String(exitMs)) ? exitMs : findClosestExitBucket(exitMs);
+    if(bucketKey === null) continue;
+
+    const candidates = byExit.get(String(bucketKey));
+    if(!candidates || !candidates.length) continue;
+
+    const tDir = (Number(t.dir) === -1) ? -1 : 1;
+    const tCoin = String(t.coin || "").trim().toUpperCase();
+    const tExitPx = num(t.exit_price);
+
+    let best = null;
+    let bestScore = Infinity;
+
+    for(const a of candidates){
+      const aDir = (Number(a.dir) === -1) ? -1 : 1;
+      const aCoin = String(a.coin || "").trim().toUpperCase();
+      const aExitPx = num(a.exit_price);
+
+      let score = 0;
+      // prefer same direction
+      if(aDir !== tDir) score += 10;
+
+      // prefer same coin if trade coin looks like ticker
+      if(isTickerLike(tCoin) && isTickerLike(aCoin) && aCoin !== tCoin) score += 3;
+
+      // prefer close exit price if both are finite
+      if(Number.isFinite(tExitPx) && Number.isFinite(aExitPx)){
+        const rel = tExitPx > 0 ? Math.abs(aExitPx - tExitPx) / tExitPx : Math.abs(aExitPx - tExitPx);
+        score += Math.min(5, rel * 100); // cap influence
+      }
+
+      // prefer longer validity (entry < exit)
+      if(!(a.entry_time < a.exit_time)) score += 50;
+
+      if(score < bestScore){
+        bestScore = score;
+        best = a;
+      }
+    }
+
+    if(best){
+      t._truthEntryTime = best.entry_time;
+      t._truthExitTime  = best.exit_time;
+      t._truthHoldMs    = best.exit_time - best.entry_time;
+      t._truthDir       = best.dir;
+      t._truthCoin      = best.coin;
+    }
+  }
+}
+
+// ---------------- market window ----------------
 async function fetchMarketWindow(coin, exitTime){
   const key = `${coin}|${exitTime}`;
   if (marketCache.has(key)) return marketCache.get(key);
@@ -224,8 +437,9 @@ async function fetchMarketWindow(coin, exitTime){
   const url = `${API}/market_window?coin=${encodeURIComponent(coin)}&t=${Number(exitTime)}&windowMs=${MARKET_WINDOW_MS}`;
   const r = await fetch(url, { method: "GET" });
   if (!r.ok) {
-    marketCache.set(key, { hi: NaN, lo: NaN });
-    return { hi: NaN, lo: NaN };
+    const bad = { hi: NaN, lo: NaN };
+    marketCache.set(key, bad);
+    return bad;
   }
   const j = await r.json();
   const hi = num(j && j.hi);
@@ -259,7 +473,7 @@ async function hydrateMarketForDay(dayTrades){
     const need = [];
     for (const t of dayTrades) {
       const coin = String(t.coin || "").trim();
-      const exitTime = num(t.exit_time);
+      const exitTime = num(toMs(t.exit_time));
       if (!coin || !Number.isFinite(exitTime)) continue;
 
       const key = `${coin}|${exitTime}`;
@@ -268,19 +482,21 @@ async function hydrateMarketForDay(dayTrades){
       if (!has && !hasFields) need.push(t);
     }
 
-    const batch = need.slice(0, 40);
+    const batch = need.slice(0, 24);
 
-    for (const t of batch) {
+    const jobs = batch.map(async (t) => {
       const coin = String(t.coin || "").trim();
-      const exitTime = num(t.exit_time);
-      if (!coin || !Number.isFinite(exitTime)) continue;
+      const exitTime = num(toMs(t.exit_time));
+      if (!coin || !Number.isFinite(exitTime)) return;
 
       const { hi, lo } = await fetchMarketWindow(coin, exitTime);
       if (Number.isFinite(hi)) t.mkt_up = hi;
       if (Number.isFinite(lo)) t.mkt_dn = lo;
 
       if (selectedAtom === t) updateDetailsPanel();
-    }
+    });
+
+    await Promise.allSettled(jobs);
   } finally {
     marketLoading = false;
   }
@@ -292,13 +508,16 @@ async function init(){
   trades = data.trades || [];
   fills = data.fills || [];
 
+  // attach truth (fix 199h) without changing architecture
+  attachTruthToTrades(trades, fills);
+
   if(!trades.length){
     dateEl.textContent = "No data";
     return;
   }
 
   let minT = Infinity;
-  for(const t of trades) minT = Math.min(minT, Number(t.entry_time));
+  for(const t of trades) minT = Math.min(minT, toMs(t.entry_time));
 
   const startDay = dayFloorUTC(minT);
   const endDay   = dayFloorUTC(Date.now());
@@ -314,8 +533,12 @@ await init();
 function computeBehavior(dayTrades, eff){
   let v = 0;
   for(const t of dayTrades){
-    if(eff.limitTime && t.exit_time > eff.limitTime) break;
-    const hold = (t.exit_time - t.entry_time)/60000;
+    if(eff.limitTime && toMs(t.exit_time) > eff.limitTime) break;
+
+    const entry = getEntryTimeForRender(t);
+    const exit  = getExitTimeForRender(t);
+    const hold = (exit - entry)/60000;
+
     v += Math.max(-1, Math.min(1, hold - 160));
   }
   return Math.max(-1, Math.min(1, v/12));
@@ -325,19 +548,19 @@ function markFlipOpen(dayTrades){
   for(const t of dayTrades) t._flipOpen = false;
 
   dayTrades.sort((a,b)=>
-    (Number(a.entry_time) - Number(b.entry_time)) ||
-    (Number(a.exit_time)  - Number(b.exit_time))
+    (toMs(a.entry_time) - toMs(b.entry_time)) ||
+    (toMs(a.exit_time)  - toMs(b.exit_time))
   );
 
-  const EPS_T = 0.5;
+  const EPS_T = 2;     // ms tolerance
   const EPS_P = 1e-9;
 
   for(let i=1;i<dayTrades.length;i++){
     const prev = dayTrades[i-1];
     const cur  = dayTrades[i];
 
-    const prevExitT = Number(prev.exit_time);
-    const curEntryT = Number(cur.entry_time);
+    const prevExitT = toMs(prev.exit_time);
+    const curEntryT = toMs(cur.entry_time);
 
     const prevExitPx = Number(prev.exit_price);
     const curEntryPx = Number(cur.entry_price);
@@ -385,7 +608,7 @@ function pickNearestAtom(xClient, yClient){
       dx = xClient - t._px;
       dy = yClient - t._py;
     } else {
-      const exit = Number(t.exit_time);
+      const exit = getExitTimeForRender(t);
       if(!Number.isFinite(exit)) continue;
 
       const yAtom = H * 0.55;
@@ -407,6 +630,25 @@ function pickNearestAtom(xClient, yClient){
   return null;
 }
 
+// ---------- truth-aware time getters ----------
+function getEntryTimeForRender(t){
+  const te = toMs(t._truthEntryTime);
+  if(Number.isFinite(te)) return te;
+  return toMs(t.entry_time);
+}
+function getExitTimeForRender(t){
+  const tx = toMs(t._truthExitTime);
+  if(Number.isFinite(tx)) return tx;
+  return toMs(t.exit_time);
+}
+function getHoldMsTruth(t){
+  const h = num(t._truthHoldMs);
+  if(Number.isFinite(h) && h >= 0) return h;
+  const entry = getEntryTimeForRender(t);
+  const exit  = getExitTimeForRender(t);
+  return (Number.isFinite(entry) && Number.isFinite(exit)) ? (exit - entry) : NaN;
+}
+
 // ---- compact details panel ----
 function updateDetailsPanel(){
   if(!selectedAtom){
@@ -419,14 +661,9 @@ function updateDetailsPanel(){
   const { label, value } = coinLabel(selectedAtom);
   const dir = (Number(selectedAtom.dir) === -1) ? "SHORT" : "LONG";
 
-  const entryT = num(selectedAtom.entry_time);
-  const exitT  = num(selectedAtom.exit_time);
-
-  const localHoldMs = num(selectedAtom._localHoldMs);
-  const holdMs =
-    Number.isFinite(localHoldMs)
-      ? localHoldMs
-      : (Number.isFinite(entryT) && Number.isFinite(exitT) ? (exitT - entryT) : NaN);
+  const holdMs = Number.isFinite(num(selectedAtom._localHoldMs))
+    ? num(selectedAtom._localHoldMs)
+    : getHoldMsTruth(selectedAtom);
 
   const hold = formatHold(holdMs);
 
@@ -450,6 +687,7 @@ function updateDetailsPanel(){
 }
 
 function setBaseDebugText(){
+  // optional: keep minimal
   debugEl.textContent =
     "fills/trades ok\n"+
     "fills total: " + fills.length + "\n" +
@@ -466,14 +704,7 @@ function updateDay(){
 
   markFlipOpen(dayTrades);
 
-  // precompute local hold for the whole day (tap works immediately)
-  for (const t of dayTrades) {
-    const entry = Number(t.entry_time);
-    const exit  = Number(t.exit_time);
-    t._localHoldMs = (Number.isFinite(entry) && Number.isFinite(exit)) ? (exit - entry) : NaN;
-  }
-
-  const exits = dayTrades.map(t=>t.exit_time).sort((a,b)=>a-b);
+  const exits = dayTrades.map(t=>getExitTimeForRender(t)).filter(Number.isFinite).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exits);
 
   arrowValue = computeBehavior(dayTrades, efficiency);
@@ -482,7 +713,9 @@ function updateDay(){
   dateEl.textContent = new Date(d0).toDateString();
 
   if(selectedAtom){
-    const inDay = (Number(selectedAtom.exit_time) > d0) && (Number(selectedAtom.entry_time) < d0 + DAY);
+    const exit = getExitTimeForRender(selectedAtom);
+    const entry = getEntryTimeForRender(selectedAtom);
+    const inDay = (exit > d0) && (entry < d0 + DAY);
     if(!inDay) selectedAtom = null;
   }
 
@@ -503,11 +736,22 @@ canvas.addEventListener("pointerdown",e=>{
 canvas.addEventListener("pointermove",e=>{
   if(!days.length) return;
   if(!isDown) return;
-  currentX=e.clientX;
-  const x=Math.max(0,Math.min(W,currentX));
-  const t=days[dayIndex]+(x/W)*DAY;
-  timeEl.textContent=formatTime(t);
-  timeEl.style.left=x+"px";
+
+  pendingMoveX = e.clientX;
+  if(moveRaf) return;
+
+  moveRaf = requestAnimationFrame(()=>{
+    moveRaf = 0;
+    if(pendingMoveX === null) return;
+
+    currentX = pendingMoveX;
+    pendingMoveX = null;
+
+    const x=Math.max(0,Math.min(W,currentX));
+    const t=days[dayIndex]+(x/W)*DAY;
+    timeEl.textContent=formatTime(t);
+    timeEl.style.left=x+"px";
+  });
 });
 
 canvas.addEventListener("pointerup",(e)=>{
@@ -545,8 +789,9 @@ canvas.addEventListener("pointercancel",()=>{
 function drawAtom(t, d0){
   const d1 = d0 + DAY;
 
-  const entry = Number(t.entry_time);
-  const exit  = Number(t.exit_time);
+  // use truth times for hold/blue tail, but keep exit-x based on chosen exit time
+  const entry = getEntryTimeForRender(t);
+  const exit  = getExitTimeForRender(t);
   if(!isFinite(entry) || !isFinite(exit)) return;
 
   const y = H * 0.55;
@@ -559,7 +804,7 @@ function drawAtom(t, d0){
   t._py = y;
   t._dayKey = d0;
 
-  // store exact local hold alongside draw coordinates (truth for details)
+  // store exact local hold (truth for details)
   t._localHoldMs = exit - entry;
 
   if(selectedAtom === t){
@@ -576,6 +821,7 @@ function drawAtom(t, d0){
   ctx.arc(xExit, y, 3, 0, Math.PI * 2);
   ctx.fill();
 
+  // BLUE tail (HOLD) uses truth hold
   const dirBlue = (t.dir === -1 ? -1 : 1);
   const holdMin = Math.max(0, (exit - entry) / 60000);
   const blueLen = clamp(8, holdMin, 160);
@@ -587,6 +833,7 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
+  // GREEN tail (MARKET)
   const exitPx = Number(t.exit_price);
   const mUp = Number(t.mkt_up);
   const mDn = Number(t.mkt_dn);
@@ -657,4 +904,3 @@ render();
 </script>
 </body>
 </html>
-```0
