@@ -45,6 +45,11 @@ canvas{display:block;touch-action:none}
   white-space:pre;
   pointer-events:none;
 }
+
+/* ✅ hidden utility: keep debug in code, hide in UI by default */
+.hidden{
+  display:none !important;
+}
 </style>
 </head>
 
@@ -52,7 +57,8 @@ canvas{display:block;touch-action:none}
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
-<div id="debug"></div>
+<!-- ✅ debug kept, but hidden by default -->
+<div id="debug" class="hidden"></div>
 
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
@@ -463,7 +469,7 @@ canvas.addEventListener("pointerup",(e)=>{
 
   const dx = currentX - startX;
 
-  // TAP => pick nearest atom and show debug numbers
+  // TAP => pick nearest atom and show debug numbers (kept in code)
   if(Math.abs(dx) <= TAP_MAX_DX){
     const picked = pickNearestAtom(currentX, e.clientY);
     selectedAtom = picked;
@@ -476,7 +482,7 @@ canvas.addEventListener("pointerup",(e)=>{
     if(dx>0 && dayIndex>0) dayIndex--;
     if(dx<0 && dayIndex<days.length-1) dayIndex++;
 
-    // ✅ FIX: reset selection on day change (no “yesterday atom still selected”)
+    // reset selection on day change (no “yesterday atom still selected”)
     selectedAtom = null;
     selectedDebugText = "";
 
@@ -611,3 +617,4 @@ render();
 </script>
 </body>
 </html>
+```0
