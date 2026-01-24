@@ -88,20 +88,15 @@ canvas{display:block;touch-action:none}
 <script type="module">
 import { computeEfficiency, drawEfficiencyLayer } from "./efficiency.js";
 import { drawBehaviorArrow } from "./behaviorArrow.js";
+import { loadDataFromHyperliquid } from "./trades_from_hyperliquid.js";
 
-/* =========================
-   CONFIG
-   ========================= */
-const DEFAULT_ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
-const qs = new URLSearchParams(location.search);
-const ACCOUNT = (qs.get("account") || DEFAULT_ACCOUNT).trim();
-
-/* IMPORTANT: this is your Worker base */
-const API_BASE = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
-
+const ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const DAY = 86400000;
 const SWIPE_PX = 50;
+
+const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
+
 const FLIP_SHIFT_PX = 10;
 
 // tap selection
@@ -135,7 +130,7 @@ resize();
 
 // ---------------- state ----------------
 let trades = [];
-let fills = []; // kept for debug text only (now always empty)
+let fills = [];
 let days = [];
 let dayIndex = 0;
 
@@ -206,6 +201,7 @@ function formatPct(p){
 
 /* =========================
    FIX #107: safe label
+   - If coin is not a normal ticker, show "Market: #id"
    ========================= */
 function isTickerLike(s){
   if(!s) return false;
@@ -244,34 +240,12 @@ function tradesForDay(d0){
   );
 }
 
-/* =========================
-   DATA LOADER (FIXED)
-   - trades MUST come from worker: scope=coin
-   - /fills removed (optional) to speed load
-   - fetchJson is HARD (no silent null)
-   ========================= */
-async function fetchJson(url){
-  const r = await fetch(url, { method: "GET" });
-  if(!r.ok){
-    const text = await r.text();
-    throw new Error(`HTTP ${r.status}: ${text.slice(0,200)}`);
-  }
-  return r.json();
-}
-
-async function loadDataFromWorker(account){
-  const tradesUrl = `${API_BASE}/trades?account=${encodeURIComponent(account)}&scope=coin`;
-  const tj = await fetchJson(tradesUrl);
-  const trades = Array.isArray(tj?.trades) ? tj.trades : [];
-  return { trades, fills: [] };
-}
-
 // ---------------- market window ----------------
 async function fetchMarketWindow(coin, exitTimeMs){
   const key = `${coin}|${exitTimeMs}`;
   if (marketCache.has(key)) return marketCache.get(key);
 
-  const url = `${API_BASE}/market_window?coin=${encodeURIComponent(coin)}&t=${Number(exitTimeMs)}&windowMs=${MARKET_WINDOW_MS}`;
+  const url = `${API}/market_window?coin=${encodeURIComponent(coin)}&t=${Number(exitTimeMs)}&windowMs=${MARKET_WINDOW_MS}`;
   const r = await fetch(url, { method: "GET" });
 
   if (!r.ok) {
@@ -323,6 +297,7 @@ async function hydrateMarketForDay(dayTrades){
 
     const batch = need.slice(0, 40);
 
+    // safe sequential (as you wanted)
     for (const t of batch) {
       const coin = String(t.coin || "").trim();
       const exitTimeMs = toMs(t.exit_time);
@@ -341,21 +316,12 @@ async function hydrateMarketForDay(dayTrades){
 
 // ---------------- init ----------------
 async function init(){
-  let data;
-  try {
-    data = await loadDataFromWorker(ACCOUNT);
-  } catch (e) {
-    dateEl.textContent = "Load error";
-    detailsEl.textContent = String(e?.message || e);
-    detailsEl.classList.add("show");
-    return;
-  }
-
+  const data = await loadDataFromHyperliquid(ACCOUNT);
   trades = data.trades || [];
   fills = data.fills || [];
 
   if(!trades.length){
-    dateEl.textContent = "No trades";
+    dateEl.textContent = "No data";
     return;
   }
 
@@ -379,8 +345,8 @@ function computeBehavior(dayTrades, eff){
     if(eff.limitTime && toMs(t.exit_time) > eff.limitTime) break;
 
     // behavior uses FULL atom hold (strict rule)
-    const hms = holdMsAtom(t);
-    const holdMin = Number.isFinite(hms) ? (hms / 60000) : 0;
+    const holdMs = holdMsAtom(t);
+    const holdMin = Number.isFinite(holdMs) ? (holdMs / 60000) : 0;
 
     v += Math.max(-1, Math.min(1, holdMin - 160));
   }
@@ -494,6 +460,7 @@ function updateDetailsPanel(){
   const mp = marketMovePct(selectedAtom);
   const marketLine = Number.isFinite(mp) ? `Market move: ${formatPct(mp)}` : "Market move: ...";
 
+  // DIAG: show entry/exit to validate 199h vs 16h
   const lines = [
     `${label}: ${value}`,
     `Direction: ${dir}`,
@@ -514,8 +481,7 @@ function updateDetailsPanel(){
 
 function setBaseDebugText(){
   debugEl.textContent =
-    "ok\n"+
-    "account: " + ACCOUNT + "\n" +
+    "fills/trades ok\n"+
     "fills total: " + fills.length + "\n" +
     "trades total: " + trades.length + "\n" +
     "days total: " + days.length + "\n" +
@@ -617,6 +583,9 @@ function drawAtom(t, d0){
   t._px = xExit;
   t._py = y;
   t._dayKey = d0;
+
+  // store full atom hold (strict rule)
+  t._localHoldMs = exit - entry;
 
   if(selectedAtom === t){
     ctx.strokeStyle = "rgba(0,0,0,.16)";
