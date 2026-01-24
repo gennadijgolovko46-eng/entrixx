@@ -71,7 +71,7 @@ const FLIP_SHIFT_PX = 10;
 
 // ======== TAP DEBUG (safe, no geometry changes) ========
 const TAP_MAX_DX = 8;         // px: below => treat as tap (not swipe)
-const PICK_MAX_DIST = 18;     // px: max distance in X to pick an atom
+const HIT_R = 28;             // px: finger hit radius (24..32 ok)
 let selectedAtom = null;      // reference to trade object
 let selectedDebugText = "";
 // =======================================================
@@ -259,7 +259,6 @@ function markFlipOpen(dayTrades){
     const timeMatch = Math.abs(prevExitT - curEntryT) <= EPS_T;
     if(!timeMatch) continue;
 
-    // price match is optional but helps avoid accidental same-ms neighbors
     const priceMatch =
       Number.isFinite(prevExitPx) && Number.isFinite(curEntryPx)
         ? Math.abs(prevExitPx - curEntryPx) <= EPS_P
@@ -310,11 +309,14 @@ function marketMetrics(t){
   return { exitPrice, hi, lo, movePct, greenLen, upMoveRaw, dnMoveRaw };
 }
 
-function pickNearestAtomByX(xClient){
+// ✅ SAFEST FIX: pick by (X,Y) distance to the atom point (not just X)
+function pickNearestAtom(xClient, yClient){
   if(!days.length) return null;
   const d0 = days[dayIndex];
   const dayTrades = tradesForDay(d0);
   if(!dayTrades.length) return null;
+
+  const yAtom = H * 0.55;
 
   let best = null;
   let bestDist = Infinity;
@@ -326,14 +328,17 @@ function pickNearestAtomByX(xClient){
     const baseX = ((clamp(d0, exit, d0 + DAY) - d0) / DAY) * W;
     const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
-    const dist = Math.abs(xClient - xExit);
+    const dx = xClient - xExit;
+    const dy = yClient - yAtom;
+    const dist = Math.hypot(dx, dy);
+
     if(dist < bestDist){
       bestDist = dist;
       best = t;
     }
   }
 
-  if(best && bestDist <= PICK_MAX_DIST) return best;
+  if(best && bestDist <= HIT_R) return best;
   return null;
 }
 
@@ -460,7 +465,7 @@ canvas.addEventListener("pointerup",(e)=>{
 
   // TAP => pick nearest atom and show debug numbers
   if(Math.abs(dx) <= TAP_MAX_DX){
-    const picked = pickNearestAtomByX(currentX);
+    const picked = pickNearestAtom(currentX, e.clientY);
     selectedAtom = picked;
     updateSelectedDebug();
     setBaseDebugText();
@@ -499,6 +504,16 @@ function drawAtom(t, d0){
 
   // shift ONLY if this atom is flip-open
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
+
+  // ---- optional: highlight selected atom (UI only) ----
+  if(selectedAtom === t){
+    ctx.strokeStyle = "rgba(0,0,0,.25)";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(xExit, y, 9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
 
   // atom dot at exit time
   ctx.fillStyle = "#000";
@@ -592,4 +607,3 @@ render();
 </script>
 </body>
 </html>
-```0
