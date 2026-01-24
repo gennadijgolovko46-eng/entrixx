@@ -65,7 +65,7 @@ canvas{display:block;touch-action:none}
   position:fixed;
   top:10px;
   left:10px;
-  max-width:320px;
+  max-width:360px;
   padding:10px 12px;
   border-radius:10px;
   background:rgba(255,255,255,.85);
@@ -134,7 +134,11 @@ let fills = [];
 let days = [];
 let dayIndex = 0;
 
+// current-day cache (avoid filter each frame)
 let currentDayTrades = [];
+
+// optional: map day->trades cache to make swipes instant
+const dayCache = new Map();
 
 let efficiency = { limitTime:null };
 let arrowValue = 0;
@@ -206,26 +210,31 @@ function coinLabel(t){
   return { label: "Market", value: "n/a" };
 }
 
-// --- day-local hold (kills "199h from past entry") ---
-function dayHoldMs(t, d0){
-  const entry = Number(t.entry_time);
-  const exit  = Number(t.exit_time);
+/*
+  RULE: atom = one CLOSED trade.
+  HOLD MUST be: exit_time - entry_time (no day clipping).
+*/
+function holdMsAtom(t){
+  const entry = num(t.entry_time);
+  const exit  = num(t.exit_time);
   if(!Number.isFinite(entry) || !Number.isFinite(exit)) return NaN;
-
-  const d1 = d0 + DAY;
-  const entryIn = Math.max(entry, d0);
-  const exitIn  = Math.min(exit, d1);
-
-  const ms = exitIn - entryIn;
+  const ms = exit - entry;
   return (Number.isFinite(ms) && ms >= 0) ? ms : NaN;
 }
 
 function tradesForDay(d0){
+  // NOTE: we still FILTER by day for visualization only.
+  // This does NOT change hold.
+  if(dayCache.has(d0)) return dayCache.get(d0);
+
   const d1 = d0 + DAY;
-  return trades.filter(t =>
-    Number(t.exit_time) > d0 &&
-    Number(t.entry_time) < d1
+  const arr = trades.filter(t =>
+    num(t.exit_time) > d0 &&
+    num(t.entry_time) < d1
   );
+
+  dayCache.set(d0, arr);
+  return arr;
 }
 
 // ---------------- market window ----------------
@@ -285,7 +294,7 @@ async function hydrateMarketForDay(dayTrades){
 
     const batch = need.slice(0, 40);
 
-    // keep it safe: sequential (как было). Если захочешь — сделаем лимитированную параллель.
+    // safe sequential (как было)
     for (const t of batch) {
       const coin = String(t.coin || "").trim();
       const exitTime = num(t.exit_time);
@@ -314,7 +323,7 @@ async function init(){
   }
 
   let minT = Infinity;
-  for(const t of trades) minT = Math.min(minT, Number(t.entry_time));
+  for(const t of trades) minT = Math.min(minT, num(t.entry_time));
 
   const startDay = dayFloorUTC(minT);
   const endDay   = dayFloorUTC(Date.now());
@@ -327,14 +336,12 @@ async function init(){
 await init();
 
 // ---------------- per-day recompute ----------------
-function computeBehavior(dayTrades, eff, d0){
+function computeBehavior(dayTrades, eff){
   let v = 0;
   for(const t of dayTrades){
-    if(eff.limitTime && Number(t.exit_time) > eff.limitTime) break;
+    if(eff.limitTime && num(t.exit_time) > eff.limitTime) break;
 
-    const holdMs = dayHoldMs(t, d0);
-    const holdMin = Number.isFinite(holdMs) ? (holdMs / 60000) : 0;
-
+    const holdMin = Math.max(0, holdMsAtom(t) / 60000);
     v += Math.max(-1, Math.min(1, holdMin - 160));
   }
   return Math.max(-1, Math.min(1, v/12));
@@ -344,8 +351,8 @@ function markFlipOpen(dayTrades){
   for(const t of dayTrades) t._flipOpen = false;
 
   dayTrades.sort((a,b)=>
-    (Number(a.entry_time) - Number(b.entry_time)) ||
-    (Number(a.exit_time)  - Number(b.exit_time))
+    (num(a.entry_time) - num(b.entry_time)) ||
+    (num(a.exit_time)  - num(b.exit_time))
   );
 
   const EPS_T = 0.5;
@@ -355,11 +362,11 @@ function markFlipOpen(dayTrades){
     const prev = dayTrades[i-1];
     const cur  = dayTrades[i];
 
-    const prevExitT = Number(prev.exit_time);
-    const curEntryT = Number(cur.entry_time);
+    const prevExitT = num(prev.exit_time);
+    const curEntryT = num(cur.entry_time);
 
-    const prevExitPx = Number(prev.exit_price);
-    const curEntryPx = Number(cur.entry_price);
+    const prevExitPx = num(prev.exit_price);
+    const curEntryPx = num(cur.entry_price);
 
     if(!Number.isFinite(prevExitT) || !Number.isFinite(curEntryT)) continue;
 
@@ -404,7 +411,7 @@ function pickNearestAtom(xClient, yClient){
       dx = xClient - t._px;
       dy = yClient - t._py;
     } else {
-      const exit = Number(t.exit_time);
+      const exit = num(t.exit_time);
       if(!Number.isFinite(exit)) continue;
 
       const yAtom = H * 0.55;
@@ -435,20 +442,11 @@ function updateDetailsPanel(){
     return;
   }
 
-  const d0 = dayKeyOfCurrent();
-
   const { label, value } = coinLabel(selectedAtom);
   const dir = (Number(selectedAtom.dir) === -1) ? "SHORT" : "LONG";
 
-  // Prefer day-local hold (either saved by drawAtom or computed on the fly)
-  const savedLocal = num(selectedAtom._localHoldMs);
-  const computedLocal = dayHoldMs(selectedAtom, d0);
-
-  const holdMs =
-    Number.isFinite(savedLocal) && selectedAtom._dayKey === d0
-      ? savedLocal
-      : (Number.isFinite(computedLocal) ? computedLocal : NaN);
-
+  // RULE: atom hold = exit-entry (single source of truth)
+  const holdMs = holdMsAtom(selectedAtom);
   const hold = formatHold(holdMs);
 
   const mp = marketMovePct(selectedAtom);
@@ -478,7 +476,12 @@ function setBaseDebugText(){
     "days total: " + days.length + "\n" +
     "dayIndex: " + dayIndex + "\n" +
     "dayTrades: " + currentDayTrades.length + "\n" +
-    "limitTime: " + (efficiency.limitTime ?? "null");
+    "limitTime: " + (efficiency.limitTime ?? "null") + "\n" +
+    (selectedAtom
+      ? ("selected hold(ms): " + holdMsAtom(selectedAtom) + "\n" +
+         "entry: " + num(selectedAtom.entry_time) + "\n" +
+         "exit : " + num(selectedAtom.exit_time))
+      : "selected: none");
 }
 
 function updateDay(){
@@ -487,16 +490,21 @@ function updateDay(){
 
   markFlipOpen(currentDayTrades);
 
-  const exits = currentDayTrades.map(t=>Number(t.exit_time)).filter(Number.isFinite).sort((a,b)=>a-b);
+  const exits = currentDayTrades
+    .map(t=>num(t.exit_time))
+    .filter(Number.isFinite)
+    .sort((a,b)=>a-b);
+
   efficiency = computeEfficiency(exits);
 
-  arrowValue = computeBehavior(currentDayTrades, efficiency, d0);
+  arrowValue = computeBehavior(currentDayTrades, efficiency);
   frozen = !!efficiency.limitTime;
 
   dateEl.textContent = new Date(d0).toDateString();
 
   if(selectedAtom){
-    const inDay = (Number(selectedAtom.exit_time) > d0) && (Number(selectedAtom.entry_time) < d0 + DAY);
+    // keep selection only if still visible in this day range
+    const inDay = (num(selectedAtom.exit_time) > d0) && (num(selectedAtom.entry_time) < d0 + DAY);
     if(!inDay) selectedAtom = null;
   }
 
@@ -532,6 +540,7 @@ canvas.addEventListener("pointerup",(e)=>{
   if(Math.abs(dx) <= TAP_MAX_DX){
     selectedAtom = pickNearestAtom(currentX, e.clientY);
     updateDetailsPanel();
+    setBaseDebugText();
   }
 
   if(Math.abs(dx)>SWIPE_PX){
@@ -559,12 +568,13 @@ canvas.addEventListener("pointercancel",()=>{
 function drawAtom(t, d0){
   const d1 = d0 + DAY;
 
-  const entry = Number(t.entry_time);
-  const exit  = Number(t.exit_time);
-  if(!isFinite(entry) || !isFinite(exit)) return;
+  const entry = num(t.entry_time);
+  const exit  = num(t.exit_time);
+  if(!Number.isFinite(entry) || !Number.isFinite(exit)) return;
 
   const y = H * 0.55;
 
+  // x is "exit within this day viewport" (visualization only)
   const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
@@ -572,9 +582,6 @@ function drawAtom(t, d0){
   t._px = xExit;
   t._py = y;
   t._dayKey = d0;
-
-  // IMPORTANT: store DAY-LOCAL hold (so no "199h from old entry")
-  t._localHoldMs = dayHoldMs(t, d0);
 
   if(selectedAtom === t){
     ctx.strokeStyle = "rgba(0,0,0,.16)";
@@ -590,9 +597,9 @@ function drawAtom(t, d0){
   ctx.arc(xExit, y, 3, 0, Math.PI * 2);
   ctx.fill();
 
+  // BLUE tail: HOLD (atom-wide, NOT day-clipped)
   const dirBlue = (t.dir === -1 ? -1 : 1);
-  const holdMs = num(t._localHoldMs);
-  const holdMin = Number.isFinite(holdMs) ? Math.max(0, holdMs / 60000) : 0;
+  const holdMin = Math.max(0, holdMsAtom(t) / 60000);
   const blueLen = clamp(8, holdMin, 160);
 
   ctx.strokeStyle = "#2F6BFF";
@@ -602,13 +609,14 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
-  const exitPx = Number(t.exit_price);
-  const mUp = Number(t.mkt_up);
-  const mDn = Number(t.mkt_dn);
+  // GREEN tail: market move (from exit window)
+  const exitPx = num(t.exit_price);
+  const mUp = num(t.mkt_up);
+  const mDn = num(t.mkt_dn);
 
-  if(isFinite(exitPx) && (isFinite(mUp) || isFinite(mDn))) {
-    const upMove = isFinite(mUp) ? Math.max(0, mUp - exitPx) : 0;
-    const dnMove = isFinite(mDn) ? Math.max(0, exitPx - mDn) : 0;
+  if(Number.isFinite(exitPx) && (Number.isFinite(mUp) || Number.isFinite(mDn))) {
+    const upMove = Number.isFinite(mUp) ? Math.max(0, mUp - exitPx) : 0;
+    const dnMove = Number.isFinite(mDn) ? Math.max(0, exitPx - mDn) : 0;
     const move = Math.max(upMove, dnMove);
 
     if(move > 0) {
@@ -671,3 +679,4 @@ render();
 </script>
 </body>
 </html>
+```0
