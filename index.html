@@ -96,8 +96,8 @@ const DEFAULT_ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
 const qs = new URLSearchParams(location.search);
 const ACCOUNT = (qs.get("account") || DEFAULT_ACCOUNT).trim();
 
-/* IMPORTANT: this is your Worker base (FIXED TO YOUR REAL DOMAIN) */
-const API_BASE = "https://eze-fa50.gennadijgolovko46.workers.dev";
+/* IMPORTANT: Worker base (RESTORED) */
+const API_BASE = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
 const DAY = 86400000;
 const SWIPE_PX = 50;
@@ -359,6 +359,12 @@ async function init(){
 
   trades = data.trades || [];
   fills = data.fills || [];
+
+  // STABILITY: sort once globally (prevents random ordering issues)
+  trades.sort((a,b)=>
+    (toMs(a.entry_time) - toMs(b.entry_time)) ||
+    (toMs(a.exit_time)  - toMs(b.exit_time))
+  );
 
   if(!trades.length){
     dateEl.textContent = "No trades";
@@ -722,3 +728,4 @@ render();
 </script>
 </body>
 </html>
+```0
