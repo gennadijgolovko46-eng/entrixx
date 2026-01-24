@@ -13,14 +13,16 @@ html,body{
   overflow:hidden;
 }
 canvas{display:block;touch-action:none}
+
 #date{
   position:fixed;
   bottom:14px;
   left:50%;
   transform:translateX(-50%);
   font:12px system-ui,sans-serif;
-  color:rgba(0,0,0,.45)
+  color:rgba(0,0,0,.45);
 }
+
 #time{
   position:fixed;
   top:8px;
@@ -30,6 +32,36 @@ canvas{display:block;touch-action:none}
   color:rgba(0,0,0,.9);
   opacity:0;
   pointer-events:none;
+}
+
+/* compact details panel (max 4 lines) */
+#details{
+  position:fixed;
+  top:10px;
+  left:10px;
+  max-width:260px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(255,255,255,.86);
+  border:1px solid rgba(0,0,0,.08);
+  box-shadow:0 6px 18px rgba(0,0,0,.06);
+  font:12px system-ui,sans-serif;
+  color:rgba(0,0,0,.78);
+  line-height:1.25;
+  white-space:pre;
+  pointer-events:none;
+  opacity:0;
+  transform:translateY(-4px);
+  transition:opacity .14s ease, transform .14s ease;
+}
+#details.show{
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* keep debug in code, hidden by default */
+.hidden{
+  display:none !important;
 }
 #debug{
   position:fixed;
@@ -45,11 +77,6 @@ canvas{display:block;touch-action:none}
   white-space:pre;
   pointer-events:none;
 }
-
-/* ✅ hidden utility: keep debug in code, hide in UI by default */
-.hidden{
-  display:none !important;
-}
 </style>
 </head>
 
@@ -57,7 +84,10 @@ canvas{display:block;touch-action:none}
 <canvas id="c"></canvas>
 <div id="time"></div>
 <div id="date"></div>
-<!-- ✅ debug kept, but hidden by default -->
+
+<div id="details"></div>
+
+<!-- debug kept (hidden) -->
 <div id="debug" class="hidden"></div>
 
 <script type="module">
@@ -72,21 +102,21 @@ const SWIPE_PX = 50;
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
 
-// micro shift ONLY for flip-open (second trade in pair)
 const FLIP_SHIFT_PX = 10;
 
-// ======== TAP DEBUG (safe, no geometry changes) ========
-const TAP_MAX_DX = 8;         // px: below => treat as tap (not swipe)
-const HIT_R = 28;             // px: finger hit radius (24..32 ok)
-let selectedAtom = null;      // reference to trade object
-let selectedDebugText = "";
-// =======================================================
+// tap selection
+const TAP_MAX_DX = 8;   // px
+const HIT_R = 28;       // px hit radius
+
+let selectedAtom = null;
+let selectedDetailsText = "";
 
 // ---------------- canvas ----------------
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
 const timeEl = document.getElementById("time");
+const detailsEl = document.getElementById("details");
 const debugEl = document.getElementById("debug");
 
 let W=0,H=0;
@@ -149,6 +179,20 @@ function num(x){
   return Number.isFinite(v) ? v : NaN;
 }
 
+function formatHold(ms){
+  if(!Number.isFinite(ms) || ms < 0) return "n/a";
+  const mins = Math.round(ms / 60000);
+  if(mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatPct(p){
+  if(!Number.isFinite(p)) return "n/a";
+  return (p * 100).toFixed(3) + "%";
+}
+
 async function fetchMarketWindow(coin, exitTime){
   const key = `${coin}|${exitTime}`;
   if (marketCache.has(key)) return marketCache.get(key);
@@ -167,12 +211,27 @@ async function fetchMarketWindow(coin, exitTime){
   return res;
 }
 
+function marketMovePct(t){
+  const exitPx = num(t.exit_price);
+  if(!Number.isFinite(exitPx) || exitPx <= 0) return NaN;
+
+  const hi = num(t.mkt_up);
+  const lo = num(t.mkt_dn);
+
+  const upMove = Number.isFinite(hi) ? Math.max(0, hi - exitPx) : 0;
+  const dnMove = Number.isFinite(lo) ? Math.max(0, exitPx - lo) : 0;
+
+  const move = Math.max(upMove, dnMove);
+  if(!(move > 0)) return 0;
+
+  return move / exitPx;
+}
+
 async function hydrateMarketForDay(dayTrades){
   if (marketLoading) return;
   marketLoading = true;
 
   try {
-    // limit per update to avoid spamming worker/HL
     const need = [];
     for (const t of dayTrades) {
       const coin = String(t.coin || "").trim();
@@ -195,6 +254,9 @@ async function hydrateMarketForDay(dayTrades){
       const { hi, lo } = await fetchMarketWindow(coin, exitTime);
       if (Number.isFinite(hi)) t.mkt_up = hi;
       if (Number.isFinite(lo)) t.mkt_dn = lo;
+
+      // if this trade is selected, refresh panel when data arrives
+      if (selectedAtom === t) updateDetailsPanel();
     }
   } finally {
     marketLoading = false;
@@ -238,10 +300,8 @@ function computeBehavior(dayTrades, eff){
 
 // mark flip-open only inside current day (second trade in pair)
 function markFlipOpen(dayTrades){
-  // clear previous marks (objects are reused across days)
   for(const t of dayTrades) t._flipOpen = false;
 
-  // stable order (important)
   dayTrades.sort((a,b)=>
     (Number(a.entry_time) - Number(b.entry_time)) ||
     (Number(a.exit_time)  - Number(b.exit_time))
@@ -273,46 +333,9 @@ function markFlipOpen(dayTrades){
     const dirFlip = (Number(prev.dir) === -Number(cur.dir));
 
     if(priceMatch && dirFlip){
-      // shift only the "newly opened" one (cur)
       cur._flipOpen = true;
     }
   }
-}
-
-// ======== TAP DEBUG helpers ========
-function holdMetrics(t){
-  const entry = Number(t.entry_time);
-  const exit  = Number(t.exit_time);
-  if(!Number.isFinite(entry) || !Number.isFinite(exit)) return null;
-
-  const holdMin = Math.max(0, (exit - entry) / 60000);
-  const blueLen = clamp(8, holdMin, 160);
-
-  return { holdMin, blueLen };
-}
-
-function marketMetrics(t){
-  const exitPrice = Number(t.exit_price);
-  const hi = Number(t.mkt_up);
-  const lo = Number(t.mkt_dn);
-
-  if(!Number.isFinite(exitPrice)) return null;
-
-  const upMoveRaw = Number.isFinite(hi) ? Math.max(0, hi - exitPrice) : NaN;
-  const dnMoveRaw = Number.isFinite(lo) ? Math.max(0, exitPrice - lo) : NaN;
-
-  const upMove = Number.isFinite(upMoveRaw) ? upMoveRaw : 0;
-  const dnMove = Number.isFinite(dnMoveRaw) ? dnMoveRaw : 0;
-
-  const move = Math.max(upMove, dnMove);
-  const movePct = exitPrice > 0 ? (move / exitPrice) : NaN;
-
-  const greenLen =
-    (Number.isFinite(movePct) && move > 0)
-      ? clamp(6, movePct * 4000, 160)
-      : 0;
-
-  return { exitPrice, hi, lo, movePct, greenLen, upMoveRaw, dnMoveRaw };
 }
 
 // pick by (X,Y) distance to atom point
@@ -348,64 +371,42 @@ function pickNearestAtom(xClient, yClient){
   return null;
 }
 
-function updateSelectedDebug(){
+// ---- compact details panel ----
+function updateDetailsPanel(){
   if(!selectedAtom){
-    selectedDebugText = "";
+    selectedDetailsText = "";
+    detailsEl.textContent = "";
+    detailsEl.classList.remove("show");
     return;
   }
 
-  const h = holdMetrics(selectedAtom);
-  const m = marketMetrics(selectedAtom);
+  const coin = String(selectedAtom.coin || "").trim() || "n/a";
+  const dir = (Number(selectedAtom.dir) === -1) ? "SHORT" : "LONG";
 
-  const entryT = Number(selectedAtom.entry_time);
-  const exitT  = Number(selectedAtom.exit_time);
+  const entryT = num(selectedAtom.entry_time);
+  const exitT  = num(selectedAtom.exit_time);
+  const hold = (Number.isFinite(entryT) && Number.isFinite(exitT)) ? formatHold(exitT - entryT) : "n/a";
 
-  const lines = [];
-  lines.push("");
-  lines.push("— selected atom —");
-  lines.push("coin: " + String(selectedAtom.coin || ""));
-  lines.push("dir: " + String(selectedAtom.dir) + (selectedAtom._flipOpen ? "  (flip-open)" : ""));
-  if(Number.isFinite(entryT)) lines.push("entry: " + new Date(entryT).toUTCString());
-  if(Number.isFinite(exitT))  lines.push("exit : " + new Date(exitT).toUTCString());
+  const mp = marketMovePct(selectedAtom);
+  const marketLine = Number.isFinite(mp) ? `Market move: ${formatPct(mp)}` : "Market move: ...";
 
-  // BLUE
-  lines.push("");
-  lines.push("BLUE (HOLD)");
-  if(h){
-    const clamped = (h.blueLen === 8 && h.holdMin < 8) || (h.blueLen === 160 && h.holdMin > 160);
-    lines.push("holdMin: " + h.holdMin.toFixed(2));
-    lines.push("blueLen: " + h.blueLen.toFixed(2) + (clamped ? "  [clamp]" : ""));
-  } else {
-    lines.push("n/a");
+  const lines = [
+    `Coin: ${coin}`,
+    `Direction: ${dir}`,
+    `Hold: ${hold}`,
+    marketLine
+  ];
+
+  const text = lines.join("\n");
+
+  if(text !== selectedDetailsText){
+    selectedDetailsText = text;
+    detailsEl.textContent = text;
   }
-
-  // GREEN
-  lines.push("");
-  lines.push("GREEN (MARKET)");
-  if(m){
-    lines.push("exitPrice: " + (Number.isFinite(m.exitPrice) ? m.exitPrice : "n/a"));
-    lines.push("hi: " + (Number.isFinite(m.hi) ? m.hi : "…"));
-    lines.push("lo: " + (Number.isFinite(m.lo) ? m.lo : "…"));
-
-    const hasHiLo = Number.isFinite(m.hi) || Number.isFinite(m.lo);
-    if(hasHiLo){
-      const pct = Number.isFinite(m.movePct) ? (m.movePct * 100) : NaN;
-      const clamped = (m.greenLen === 6 && pct > 0) || (m.greenLen === 160);
-      lines.push("movePct: " + (Number.isFinite(pct) ? pct.toFixed(3) + "%" : "n/a"));
-      lines.push("greenLen: " + m.greenLen.toFixed(2) + (clamped ? "  [clamp]" : ""));
-      lines.push("rawMove: up=" + (Number.isFinite(m.upMoveRaw) ? m.upMoveRaw : "n/a") +
-                 " dn=" + (Number.isFinite(m.dnMoveRaw) ? m.dnMoveRaw : "n/a"));
-      lines.push("k=4000 -> len≈movePct*4000");
-    } else {
-      lines.push("market: loading/absent");
-    }
-  } else {
-    lines.push("n/a");
-  }
-
-  selectedDebugText = lines.join("\n");
+  detailsEl.classList.add("show");
 }
 
+// optional hidden debug (kept)
 function setBaseDebugText(){
   debugEl.textContent =
     "fills/trades ok\n"+
@@ -413,17 +414,14 @@ function setBaseDebugText(){
     "trades total: " + trades.length + "\n" +
     "days total: " + days.length + "\n" +
     "dayIndex: " + dayIndex + "\n" +
-    "dayTrades: " + tradesForDay(days[dayIndex]).length + "\n" +
-    "limitTime: " + (efficiency.limitTime ?? "null") +
-    selectedDebugText;
+    "dayTrades: " + (days.length ? tradesForDay(days[dayIndex]).length : 0) + "\n" +
+    "limitTime: " + (efficiency.limitTime ?? "null");
 }
-// =====================================
 
 function updateDay(){
   const d0 = days[dayIndex];
   const dayTrades = tradesForDay(d0);
 
-  // mark flip-open for this day only
   markFlipOpen(dayTrades);
 
   const exits = dayTrades.map(t=>t.exit_time).sort((a,b)=>a-b);
@@ -439,10 +437,10 @@ function updateDay(){
     const inDay = (Number(selectedAtom.exit_time) > d0) && (Number(selectedAtom.entry_time) < d0 + DAY);
     if(!inDay) selectedAtom = null;
   }
-  updateSelectedDebug();
+
+  updateDetailsPanel();
   setBaseDebugText();
 
-  // request green tails data for this day (best effort)
   hydrateMarketForDay(dayTrades);
 }
 
@@ -469,22 +467,20 @@ canvas.addEventListener("pointerup",(e)=>{
 
   const dx = currentX - startX;
 
-  // TAP => pick nearest atom and show debug numbers (kept in code)
+  // tap: select atom
   if(Math.abs(dx) <= TAP_MAX_DX){
-    const picked = pickNearestAtom(currentX, e.clientY);
-    selectedAtom = picked;
-    updateSelectedDebug();
-    setBaseDebugText();
+    selectedAtom = pickNearestAtom(currentX, e.clientY);
+    updateDetailsPanel();
   }
 
-  // SWIPE (as было)
+  // swipe: change day
   if(Math.abs(dx)>SWIPE_PX){
     if(dx>0 && dayIndex>0) dayIndex--;
     if(dx<0 && dayIndex<days.length-1) dayIndex++;
 
-    // reset selection on day change (no “yesterday atom still selected”)
+    // reset selection on day change
     selectedAtom = null;
-    selectedDebugText = "";
+    selectedDetailsText = "";
 
     updateDay();
   }
@@ -510,23 +506,20 @@ function drawAtom(t, d0){
 
   const y = H * 0.55;
 
-  // base x (как было)
   const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
-
-  // shift ONLY if this atom is flip-open
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
-  // ---- highlight selected atom (UI only) ----
+  // selected ring (subtle)
   if(selectedAtom === t){
-    ctx.strokeStyle = "rgba(0,0,0,.25)";
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = "rgba(0,0,0,.16)";
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(xExit, y, 9, 0, Math.PI * 2);
     ctx.stroke();
     ctx.lineWidth = 1;
   }
 
-  // atom dot at exit time
+  // atom dot
   ctx.fillStyle = "#000";
   ctx.beginPath();
   ctx.arc(xExit, y, 3, 0, Math.PI * 2);
@@ -556,10 +549,8 @@ function drawAtom(t, d0){
 
     if(move > 0) {
       const dirGreen = (upMove >= dnMove) ? 1 : -1;
-
       const movePct = move / exitPx;
       const greenLen = clamp(6, movePct * 4000, 160);
-
       const xG = xExit + 4;
 
       ctx.strokeStyle = "#2DBE60";
