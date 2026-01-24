@@ -66,6 +66,9 @@ const SWIPE_PX = 50;
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 const MARKET_WINDOW_MS = 8 * 60 * 60 * 1000;
 
+// micro shift ONLY for flip-open (second trade in pair)
+const FLIP_SHIFT_PX = 3;
+
 // ---------------- canvas ----------------
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
@@ -102,11 +105,6 @@ let startX=null, currentX=null, isDown=false;
 // cache market window results: key = coin|exit_time
 const marketCache = new Map();
 let marketLoading = false;
-
-// ======== MICRO SHIFT (только это добавлено) ========
-const sameTimeXShift = new Map(); // key = exit_time -> count
-const MICRO_SHIFT_PX = 3;
-// ================================================
 
 // ---------------- utils ----------------
 function dayFloorUTC(t){
@@ -225,9 +223,56 @@ function computeBehavior(dayTrades, eff){
   return Math.max(-1, Math.min(1, v/12));
 }
 
+// mark flip-open only inside current day (second trade in pair)
+function markFlipOpen(dayTrades){
+  // clear previous marks (objects are reused across days)
+  for(const t of dayTrades) t._flipOpen = false;
+
+  // stable order (important)
+  dayTrades.sort((a,b)=>
+    (Number(a.entry_time) - Number(b.entry_time)) ||
+    (Number(a.exit_time)  - Number(b.exit_time))
+  );
+
+  const EPS_T = 0.5; // ms tolerance
+  const EPS_P = 1e-9;
+
+  for(let i=1;i<dayTrades.length;i++){
+    const prev = dayTrades[i-1];
+    const cur  = dayTrades[i];
+
+    const prevExitT = Number(prev.exit_time);
+    const curEntryT = Number(cur.entry_time);
+
+    const prevExitPx = Number(prev.exit_price);
+    const curEntryPx = Number(cur.entry_price);
+
+    if(!Number.isFinite(prevExitT) || !Number.isFinite(curEntryT)) continue;
+
+    const timeMatch = Math.abs(prevExitT - curEntryT) <= EPS_T;
+    if(!timeMatch) continue;
+
+    // price match is optional but helps avoid accidental same-ms neighbors
+    const priceMatch =
+      Number.isFinite(prevExitPx) && Number.isFinite(curEntryPx)
+        ? Math.abs(prevExitPx - curEntryPx) <= EPS_P
+        : true;
+
+    const dirFlip = (Number(prev.dir) === -Number(cur.dir));
+
+    if(priceMatch && dirFlip){
+      // shift only the "newly opened" one (cur)
+      cur._flipOpen = true;
+    }
+  }
+}
+
 function updateDay(){
   const d0 = days[dayIndex];
   const dayTrades = tradesForDay(d0);
+
+  // mark flip-open for this day only
+  markFlipOpen(dayTrades);
 
   const exits = dayTrades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exits);
@@ -300,13 +345,8 @@ function drawAtom(t, d0){
   // base x (как было)
   const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
 
-  // ======== MICRO SHIFT (только это добавлено) ========
-  // если несколько атомов имеют одинаковый exit_time, второй/третий слегка сдвигаем вправо
-  const k = exit; // ключ — exit_time в ms
-  const idx = sameTimeXShift.get(k) || 0;
-  sameTimeXShift.set(k, idx + 1);
-  const xExit = baseX + idx * MICRO_SHIFT_PX;
-  // ================================================
+  // shift ONLY if this atom is flip-open
+  const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
   // atom dot at exit time
   ctx.fillStyle = "#000";
@@ -359,11 +399,6 @@ function drawAtom(t, d0){
 
 function render(){
   ctx.clearRect(0,0,W,H);
-
-  // ======== MICRO SHIFT reset per frame ========
-  // чтобы на каждом кадре первый атом с таким exit_time снова был “нулевым”
-  sameTimeXShift.clear();
-  // ===========================================
 
   if(!days.length){
     requestAnimationFrame(render);
