@@ -201,8 +201,8 @@ function isTickerLike(s){
   if(!s) return false;
   const t = String(s).trim();
   if(!t) return false;
-  if(/^\d+$/.test(t)) return false;        // pure number
-  if(/^@\d+$/.test(t)) return false;       // @107
+  if(/^\d+$/.test(t)) return false;
+  if(/^@\d+$/.test(t)) return false;
   if(!/^[A-Z0-9._:-]{2,15}$/.test(t)) return false;
   return /[A-Z]/.test(t);
 }
@@ -321,7 +321,6 @@ function computeBehavior(dayTrades, eff){
   return Math.max(-1, Math.min(1, v/12));
 }
 
-// mark flip-open only inside current day (second trade in pair)
 function markFlipOpen(dayTrades){
   for(const t of dayTrades) t._flipOpen = false;
 
@@ -361,14 +360,6 @@ function markFlipOpen(dayTrades){
   }
 }
 
-/* ==========================================
-   SELECTION FIX (NO ARCH CHANGES)
-   - drawAtom() stores exact draw coordinates:
-       t._px = xExit; t._py = y; t._dayKey = d0;
-   - pickNearestAtom() uses those coordinates when available,
-     so tap selects exactly what was drawn (1:1).
-   Safe fallbacks keep old behavior if coords are missing.
-   ========================================== */
 function dayKeyOfCurrent(){
   return days.length ? days[dayIndex] : 0;
 }
@@ -383,7 +374,6 @@ function pickNearestAtom(xClient, yClient){
   let bestDist = Infinity;
 
   for(const t of dayTrades){
-    // prefer stored draw coords (truth)
     const hasPxPy =
       Number.isFinite(t._px) &&
       Number.isFinite(t._py) &&
@@ -395,7 +385,6 @@ function pickNearestAtom(xClient, yClient){
       dx = xClient - t._px;
       dy = yClient - t._py;
     } else {
-      // safe fallback (old method)
       const exit = Number(t.exit_time);
       if(!Number.isFinite(exit)) continue;
 
@@ -432,7 +421,14 @@ function updateDetailsPanel(){
 
   const entryT = num(selectedAtom.entry_time);
   const exitT  = num(selectedAtom.exit_time);
-  const hold = (Number.isFinite(entryT) && Number.isFinite(exitT)) ? formatHold(exitT - entryT) : "n/a";
+
+  const localHoldMs = num(selectedAtom._localHoldMs);
+  const holdMs =
+    Number.isFinite(localHoldMs)
+      ? localHoldMs
+      : (Number.isFinite(entryT) && Number.isFinite(exitT) ? (exitT - entryT) : NaN);
+
+  const hold = formatHold(holdMs);
 
   const mp = marketMovePct(selectedAtom);
   const marketLine = Number.isFinite(mp) ? `Market move: ${formatPct(mp)}` : "Market move: ...";
@@ -453,7 +449,6 @@ function updateDetailsPanel(){
   detailsEl.classList.add("show");
 }
 
-// optional hidden debug (kept)
 function setBaseDebugText(){
   debugEl.textContent =
     "fills/trades ok\n"+
@@ -471,6 +466,13 @@ function updateDay(){
 
   markFlipOpen(dayTrades);
 
+  // precompute local hold for the whole day (tap works immediately)
+  for (const t of dayTrades) {
+    const entry = Number(t.entry_time);
+    const exit  = Number(t.exit_time);
+    t._localHoldMs = (Number.isFinite(entry) && Number.isFinite(exit)) ? (exit - entry) : NaN;
+  }
+
   const exits = dayTrades.map(t=>t.exit_time).sort((a,b)=>a-b);
   efficiency = computeEfficiency(exits);
 
@@ -479,7 +481,6 @@ function updateDay(){
 
   dateEl.textContent = new Date(d0).toDateString();
 
-  // if selected atom is not in this day -> drop it
   if(selectedAtom){
     const inDay = (Number(selectedAtom.exit_time) > d0) && (Number(selectedAtom.entry_time) < d0 + DAY);
     if(!inDay) selectedAtom = null;
@@ -514,13 +515,11 @@ canvas.addEventListener("pointerup",(e)=>{
 
   const dx = currentX - startX;
 
-  // tap: select atom (uses stored draw coords when available)
   if(Math.abs(dx) <= TAP_MAX_DX){
     selectedAtom = pickNearestAtom(currentX, e.clientY);
     updateDetailsPanel();
   }
 
-  // swipe: change day
   if(Math.abs(dx)>SWIPE_PX){
     if(dx>0 && dayIndex>0) dayIndex--;
     if(dx<0 && dayIndex<days.length-1) dayIndex++;
@@ -560,7 +559,9 @@ function drawAtom(t, d0){
   t._py = y;
   t._dayKey = d0;
 
-  // selected ring (subtle)
+  // store exact local hold alongside draw coordinates (truth for details)
+  t._localHoldMs = exit - entry;
+
   if(selectedAtom === t){
     ctx.strokeStyle = "rgba(0,0,0,.16)";
     ctx.lineWidth = 4;
@@ -570,13 +571,11 @@ function drawAtom(t, d0){
     ctx.lineWidth = 1;
   }
 
-  // atom dot
   ctx.fillStyle = "#000";
   ctx.beginPath();
   ctx.arc(xExit, y, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // BLUE tail (HOLD)
   const dirBlue = (t.dir === -1 ? -1 : 1);
   const holdMin = Math.max(0, (exit - entry) / 60000);
   const blueLen = clamp(8, holdMin, 160);
@@ -588,7 +587,6 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
-  // GREEN tail (MARKET)
   const exitPx = Number(t.exit_price);
   const mUp = Number(t.mkt_up);
   const mDn = Number(t.mkt_dn);
