@@ -14,8 +14,7 @@ async function fetchJsonHard(url) {
     return JSON.parse(text);
   } catch {
     throw new Error(
-      `BAD JSON for ${url}\n\n` +
-      `First 400 chars:\n${text.slice(0, 400)}`
+      `BAD JSON for ${url}\n\nFirst 400 chars:\n${text.slice(0, 400)}`
     );
   }
 }
