@@ -1,16 +1,18 @@
-// Efficiency Layer — FINAL (patched: factual limitTime + outlier guard)
+// Efficiency Layer — FINAL (patched: factual limitTime + outlier guard + adaptive window)
 
 const WINDOW_SIZE = 6;
 const THRESHOLD_CV = 0.45;
-const MIN_EXITS = WINDOW_SIZE + 1;
+const MIN_WINDOW = 3; // minimum deltas window to avoid noise
 
 /*
 Computes when rhythm breaks.
 limitTime is the time of the last stable atom (FACT, not forecast).
+Adaptive window: uses min(WINDOW_SIZE, deltas.length), but never below MIN_WINDOW.
 */
 export function computeEfficiency(exitTimes){
-  if(!exitTimes || exitTimes.length < MIN_EXITS){
-    return { limitTime:null };
+  if(!exitTimes || exitTimes.length < (MIN_WINDOW + 1)){
+    // Need at least MIN_WINDOW deltas => MIN_WINDOW + 1 exits
+    return { limitTime: null };
   }
 
   const deltas = [];
@@ -18,8 +20,13 @@ export function computeEfficiency(exitTimes){
     deltas.push(exitTimes[i] - exitTimes[i-1]);
   }
 
-  for(let i=WINDOW_SIZE-1;i<deltas.length;i++){
-    const window = deltas.slice(i-WINDOW_SIZE+1, i+1);
+  const WS = Math.min(WINDOW_SIZE, deltas.length);
+  if(WS < MIN_WINDOW){
+    return { limitTime: null };
+  }
+
+  for(let i=WS-1;i<deltas.length;i++){
+    const window = deltas.slice(i-WS+1, i+1);
 
     const mean = window.reduce((s,v)=>s+v,0) / window.length;
     if(mean <= 0) continue;
@@ -34,17 +41,16 @@ export function computeEfficiency(exitTimes){
     const sigma = Math.sqrt(variance);
     const cv = sigma / mean;
 
-    // PATCH:
-    // 1) No forecast: limitTime is the last stable exit
-    // 2) Outlier guard: require the last pause to "break" (big spike)
+    // Outlier guard: require the last pause to "break" (big spike)
     const lastDelta = window[window.length - 1];
 
     if(cv > THRESHOLD_CV && lastDelta > mean * 2){
+      // i is a delta index; exitTimes[i+1] is the exit time at the end of that delta
       return { limitTime: exitTimes[i+1] };
     }
   }
 
-  return { limitTime:null };
+  return { limitTime: null };
 }
 
 /*
