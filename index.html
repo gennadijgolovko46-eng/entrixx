@@ -73,7 +73,7 @@ canvas{display:block;touch-action:none}
 <script type="module">
 /* ===== Safe module import with version pin =====
    Bump V on deploy. This is your cache breaker. */
-const V = "idx-safe-5";
+const V = "idx-safe-6";
 
 /* Optional: ?safe=1 disables all tails (/market_window) calls */
 const qs0 = new URLSearchParams(location.search);
@@ -131,18 +131,26 @@ const timeEl = document.getElementById("time");
 const detailsEl = document.getElementById("details");
 const debugEl = document.getElementById("debug");
 
-let W=0,H=0;
+let W = 0, H = 0;
+let DPR = 1;
+
 function resize(){
-  const dpr = devicePixelRatio || 1;
+  DPR = devicePixelRatio || 1;
+
   W = innerWidth;
   H = innerHeight;
-  canvas.width = W*dpr;
-  canvas.height = H*dpr;
-  canvas.style.width=W+"px";
-  canvas.style.height=H+"px";
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  // backing store must be integers (prevents 1px ghost slices on DPR fractions)
+  canvas.width  = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+
+  canvas.style.width  = W + "px";
+  canvas.style.height = H + "px";
+
+  // draw in CSS px units
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
-addEventListener("resize",resize);
+addEventListener("resize", resize);
 resize();
 
 // ---------------- state ----------------
@@ -497,7 +505,6 @@ function updateDetailsPanel(){
   const hold = formatHold(holdMs);
 
   const mp = marketMovePct(selectedAtom);
-  // FIX: safe mode text was reversed before
   const marketLine = Number.isFinite(mp)
     ? `Market move: ${formatPct(mp)}`
     : (SAFE_MODE ? "Market move: (safe mode on)" : "Market move: ...");
@@ -683,7 +690,11 @@ function drawAtom(t, d0){
 }
 
 function render(){
-  ctx.clearRect(0,0,W,H);
+  // deterministic clear in device pixels (immune to DPR rounding and future transforms)
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
 
   if(!days.length){
     requestAnimationFrame(render);
