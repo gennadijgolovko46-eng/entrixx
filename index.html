@@ -71,8 +71,13 @@ canvas{display:block;touch-action:none}
 </script>
 
 <script type="module">
-/* ===== Safe module import with version pin ===== */
-const V = "idx-safe-1"; // bump on deploy
+/* ===== Safe module import with version pin =====
+   Bump V on deploy. This is your cache breaker. */
+const V = "idx-safe-3";
+
+/* Optional: ?safe=1 disables all tails (/market_window) calls */
+const qs0 = new URLSearchParams(location.search);
+const SAFE_MODE = qs0.get("safe") === "1";
 
 async function safeImport(path){
   try{
@@ -81,7 +86,7 @@ async function safeImport(path){
     window.__show(
       "IMPORT FAILED",
       `File:\n${path}\n\nError:\n${String(e?.message || e)}\n\n`+
-      `Обычно это 404, или сервер вернул HTML вместо JS (Unexpected token <).`
+      `Usually: 404, or server returned HTML instead of JS ("Unexpected token <").`
     );
     throw e;
   }
@@ -99,8 +104,7 @@ const { loadDataFromHyperliquid } = hl;
    CONFIG
    ========================= */
 const DEFAULT_ACCOUNT = "0x880ac484a1743862989a441d6d867238c7aa311c";
-const qs = new URLSearchParams(location.search);
-const ACCOUNT = (qs.get("account") || DEFAULT_ACCOUNT).trim();
+const ACCOUNT = (qs0.get("account") || DEFAULT_ACCOUNT).trim();
 
 /* IMPORTANT:
    Trades load ONLY via trades_from_hyperliquid.js (contract-safe).
@@ -143,7 +147,7 @@ resize();
 
 // ---------------- state ----------------
 let trades = [];
-let fills = []; // kept for debug only (may be empty)
+let fills = []; // debug only (may be empty)
 let days = [];
 let dayIndex = 0;
 let currentDayTrades = [];
@@ -236,10 +240,48 @@ function tradesForDay(d0){
   );
 }
 
-// ---------------- market window ----------------
+/* =========================
+   SORTING POLICY (optimal & safe)
+   - Always apply ONE canonical sort after load (idempotent).
+   - Guarantees stable render & flip detection across browsers.
+   ========================= */
+function canonSortTrades(arr){
+  arr.sort((a,b)=>{
+    const ax = toMs(a.exit_time), bx = toMs(b.exit_time);
+    if(ax !== bx) return ax - bx;
+
+    const ae = toMs(a.entry_time), be = toMs(b.entry_time);
+    if(ae !== be) return ae - be;
+
+    const ac = String(a.coin ?? ""), bc = String(b.coin ?? "");
+    if(ac !== bc) return ac < bc ? -1 : 1;
+
+    const ad = Number(a.dir) || 0, bd = Number(b.dir) || 0;
+    if(ad !== bd) return ad - bd;
+
+    const aep = Number(a.entry_price) || 0, bep = Number(b.entry_price) || 0;
+    if(aep !== bep) return aep - bep;
+
+    const axp = Number(a.exit_price) || 0, bxp = Number(b.exit_price) || 0;
+    if(axp !== bxp) return axp - bxp;
+
+    return 0;
+  });
+}
+
+/* =========================
+   market window (tails)
+   In SAFE_MODE we don't call it at all.
+   ========================= */
 async function fetchMarketWindow(coin, exitTimeMs){
   const key = `${coin}|${exitTimeMs}`;
   if (marketCache.has(key)) return marketCache.get(key);
+
+  if (SAFE_MODE) {
+    const bad = { hi: NaN, lo: NaN };
+    marketCache.set(key, bad);
+    return bad;
+  }
 
   const url = `${API_BASE}/market_window?coin=${encodeURIComponent(coin)}&t=${Number(exitTimeMs)}&windowMs=${MARKET_WINDOW_MS}`;
   const r = await fetch(url, { method: "GET" });
@@ -273,6 +315,7 @@ function marketMovePct(t){
 }
 
 async function hydrateMarketForDay(dayTrades){
+  if (SAFE_MODE) return;
   if (marketLoading) return;
   marketLoading = true;
 
@@ -309,7 +352,6 @@ async function hydrateMarketForDay(dayTrades){
 async function init(){
   let data;
   try {
-    // IMPORTANT: DO NOT BYPASS LOADER MODULE
     data = await loadDataFromHyperliquid(ACCOUNT);
   } catch (e) {
     dateEl.textContent = "Load error";
@@ -328,11 +370,8 @@ async function init(){
     return;
   }
 
-  // stability: sort once after load
-  trades.sort((a,b)=>
-    (toMs(a.exit_time) - toMs(b.exit_time)) ||
-    (toMs(a.entry_time) - toMs(b.entry_time))
-  );
+  // canonical stable ordering (idempotent even if loader already sorted)
+  canonSortTrades(trades);
 
   let minT = Infinity;
   for(const t of trades) minT = Math.min(minT, toMs(t.entry_time));
@@ -362,6 +401,7 @@ function computeBehavior(dayTrades, eff){
 function markFlipOpen(dayTrades){
   for(const t of dayTrades) t._flipOpen = false;
 
+  // local sort for flip detection only
   dayTrades.sort((a,b)=>
     (toMs(a.entry_time) - toMs(b.entry_time)) ||
     (toMs(a.exit_time)  - toMs(b.exit_time))
@@ -381,7 +421,6 @@ function markFlipOpen(dayTrades){
     const curEntryPx = Number(cur.entry_price);
 
     if(!Number.isFinite(prevExitT) || !Number.isFinite(curEntryT)) continue;
-
     if(Math.abs(prevExitT - curEntryT) > EPS_T) continue;
 
     const priceMatch =
@@ -458,7 +497,10 @@ function updateDetailsPanel(){
   const hold = formatHold(holdMs);
 
   const mp = marketMovePct(selectedAtom);
-  const marketLine = Number.isFinite(mp) ? `Market move: ${formatPct(mp)}` : "Market move: ...";
+  // FIX: safe mode text was reversed before
+  const marketLine = Number.isFinite(mp)
+    ? `Market move: ${formatPct(mp)}`
+    : (SAFE_MODE ? "Market move: (safe mode on)" : "Market move: ...");
 
   const lines = [
     `${label}: ${value}`,
@@ -480,6 +522,8 @@ function updateDetailsPanel(){
 function setBaseDebugText(){
   debugEl.textContent =
     "ok\n"+
+    "v: " + V + "\n" +
+    "safe: " + (SAFE_MODE ? "1" : "0") + "\n" +
     "account: " + ACCOUNT + "\n" +
     "fills total: " + fills.length + "\n" +
     "trades total: " + trades.length + "\n" +
@@ -608,27 +652,30 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
-  const exitPx = Number(t.exit_price);
-  const mUp = Number(t.mkt_up);
-  const mDn = Number(t.mkt_dn);
+  // green tail is disabled in SAFE_MODE
+  if(!SAFE_MODE){
+    const exitPx = Number(t.exit_price);
+    const mUp = Number(t.mkt_up);
+    const mDn = Number(t.mkt_dn);
 
-  if(Number.isFinite(exitPx) && (Number.isFinite(mUp) || Number.isFinite(mDn))) {
-    const upMove = Number.isFinite(mUp) ? Math.max(0, mUp - exitPx) : 0;
-    const dnMove = Number.isFinite(mDn) ? Math.max(0, exitPx - mDn) : 0;
-    const move = Math.max(upMove, dnMove);
+    if(Number.isFinite(exitPx) && (Number.isFinite(mUp) || Number.isFinite(mDn))) {
+      const upMove = Number.isFinite(mUp) ? Math.max(0, mUp - exitPx) : 0;
+      const dnMove = Number.isFinite(mDn) ? Math.max(0, exitPx - mDn) : 0;
+      const move = Math.max(upMove, dnMove);
 
-    if(move > 0) {
-      const dirGreen = (upMove >= dnMove) ? 1 : -1;
-      const movePct = move / exitPx;
-      const greenLen = clamp(6, movePct * 4000, 160);
-      const xG = xExit + 4;
+      if(move > 0) {
+        const dirGreen = (upMove >= dnMove) ? 1 : -1;
+        const movePct = move / exitPx;
+        const greenLen = clamp(6, movePct * 4000, 160);
+        const xG = xExit + 4;
 
-      ctx.strokeStyle = "#2DBE60";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(xG, y);
-      ctx.lineTo(xG, y + dirGreen * greenLen);
-      ctx.stroke();
+        ctx.strokeStyle = "#2DBE60";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(xG, y);
+        ctx.lineTo(xG, y + dirGreen * greenLen);
+        ctx.stroke();
+      }
     }
   }
 
