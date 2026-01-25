@@ -12,20 +12,34 @@ function toMs(v){
   return (n > 0 && n < 1e12) ? n * 1000 : n;
 }
 
-// MIN FIX: limit request to last 60 days to prevent overload
-const DAY_MS = 24 * 60 * 60 * 1000;
-const WINDOW_MS = 60 * DAY_MS;
+// client-side timeout to prevent UI hanging
+const FETCH_TIMEOUT_MS = 12000;
 
 export async function loadDataFromHyperliquid(account) {
   const acc = String(account || "").trim();
   if (!acc) return { fills: [], trades: [] };
 
-  const url =
-    `${API}/trades?account=${encodeURIComponent(acc)}&scope=coin` +
-    `&t=${Date.now()}` +
-    `&windowMs=${WINDOW_MS}`;
+  const url = `${API}/trades?account=${encodeURIComponent(acc)}&scope=coin`;
 
-  const r = await fetch(url, { method: "GET" });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let r;
+  try {
+    r = await fetch(url, {
+      method: "GET",
+      signal: controller.signal
+    });
+  } catch (e) {
+    const msg =
+      e && e.name === "AbortError"
+        ? `Timeout ${FETCH_TIMEOUT_MS}ms while fetching trades`
+        : `Network error while fetching trades`;
+    throw new Error(msg);
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (!r.ok) {
     const text = await r.text().catch(() => "");
     throw new Error(`HTTP ${r.status} while fetching trades\n${text.slice(0, 200)}`);
@@ -34,7 +48,7 @@ export async function loadDataFromHyperliquid(account) {
   const j = await r.json();
   const trades = Array.isArray(j?.trades) ? j.trades : [];
 
-  // Optional: stabilize order by exit time
+  // stabilize order by exit time
   trades.sort((a, b) => toMs(a.exit_time) - toMs(b.exit_time));
 
   return { fills: [], trades };
