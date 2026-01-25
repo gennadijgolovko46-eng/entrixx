@@ -73,7 +73,7 @@ canvas{display:block;touch-action:none}
 <script type="module">
 /* ===== Safe module import with version pin =====
    Bump V on deploy. This is your cache breaker. */
-const V = "idx-safe-6";
+const V = "idx-safe-7";
 
 /* Optional: ?safe=1 disables all tails (/market_window) calls */
 const qs0 = new URLSearchParams(location.search);
@@ -131,26 +131,18 @@ const timeEl = document.getElementById("time");
 const detailsEl = document.getElementById("details");
 const debugEl = document.getElementById("debug");
 
-let W = 0, H = 0;
-let DPR = 1;
-
+let W=0,H=0;
 function resize(){
-  DPR = devicePixelRatio || 1;
-
+  const dpr = devicePixelRatio || 1;
   W = innerWidth;
   H = innerHeight;
-
-  // backing store must be integers (prevents 1px ghost slices on DPR fractions)
-  canvas.width  = Math.round(W * DPR);
-  canvas.height = Math.round(H * DPR);
-
-  canvas.style.width  = W + "px";
-  canvas.style.height = H + "px";
-
-  // draw in CSS px units
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  canvas.width = W*dpr;
+  canvas.height = H*dpr;
+  canvas.style.width=W+"px";
+  canvas.style.height=H+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-addEventListener("resize", resize);
+addEventListener("resize",resize);
 resize();
 
 // ---------------- state ----------------
@@ -454,6 +446,9 @@ function pickNearestAtom(xClient, yClient){
   let bestDist = Infinity;
 
   for(const t of dayTrades){
+    const exit = toMs(t.exit_time);
+    if(!Number.isFinite(exit) || exit < d0 || exit >= d0 + DAY) continue;
+
     const hasPxPy =
       Number.isFinite(t._px) &&
       Number.isFinite(t._py) &&
@@ -465,9 +460,6 @@ function pickNearestAtom(xClient, yClient){
       dx = xClient - t._px;
       dy = yClient - t._py;
     } else {
-      const exit = toMs(t.exit_time);
-      if(!Number.isFinite(exit)) continue;
-
       const yAtom = H * 0.55;
       const baseX = ((clamp(d0, exit, d0 + DAY) - d0) / DAY) * W;
       const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
@@ -555,9 +547,8 @@ function updateDay(){
   dateEl.textContent = new Date(d0).toDateString();
 
   if(selectedAtom){
-    const inDay =
-      (toMs(selectedAtom.exit_time) > d0) &&
-      (toMs(selectedAtom.entry_time) < d0 + DAY);
+    const exit = toMs(selectedAtom.exit_time);
+    const inDay = Number.isFinite(exit) && exit >= d0 && exit < d0 + DAY;
     if(!inDay) selectedAtom = null;
   }
 
@@ -623,6 +614,8 @@ function drawAtom(t, d0){
   const entry = toMs(t.entry_time);
   const exit  = toMs(t.exit_time);
   if(!Number.isFinite(entry) || !Number.isFinite(exit)) return;
+
+  if(exit < d0 || exit >= d1) return;
 
   const y = H * 0.55;
 
@@ -690,11 +683,7 @@ function drawAtom(t, d0){
 }
 
 function render(){
-  // deterministic clear in device pixels (immune to DPR rounding and future transforms)
-  ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
+  ctx.clearRect(0,0,W,H);
 
   if(!days.length){
     requestAnimationFrame(render);
