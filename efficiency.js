@@ -1,4 +1,4 @@
-// Efficiency Layer — FINAL
+// Efficiency Layer — FINAL (patched: factual limitTime + outlier guard)
 
 const WINDOW_SIZE = 6;
 const THRESHOLD_CV = 0.45;
@@ -6,7 +6,7 @@ const MIN_EXITS = WINDOW_SIZE + 1;
 
 /*
 Computes when rhythm breaks.
-limitTime is AFTER the last stable atom.
+limitTime is the time of the last stable atom (FACT, not forecast).
 */
 export function computeEfficiency(exitTimes){
   if(!exitTimes || exitTimes.length < MIN_EXITS){
@@ -34,11 +34,13 @@ export function computeEfficiency(exitTimes){
     const sigma = Math.sqrt(variance);
     const cv = sigma / mean;
 
-    if(cv > THRESHOLD_CV){
-      const offset = mean;
-      return {
-        limitTime: exitTimes[i+1] + offset
-      };
+    // PATCH:
+    // 1) No forecast: limitTime is the last stable exit
+    // 2) Outlier guard: require the last pause to "break" (big spike)
+    const lastDelta = window[window.length - 1];
+
+    if(cv > THRESHOLD_CV && lastDelta > mean * 2){
+      return { limitTime: exitTimes[i+1] };
     }
   }
 
@@ -83,13 +85,13 @@ export function drawEfficiencyLayer(ctx, opts){
   ctx.strokeStyle = "#D10000";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(xLimit+0.5, 0);
-  ctx.lineTo(xLimit+0.5, height);
+  ctx.moveTo(xLimit + 0.5, 0);
+  ctx.lineTo(xLimit + 0.5, height);
   ctx.stroke();
 
   // grey
   ctx.fillStyle = "#B0B0B0";
-  ctx.fillRect(xLimit, y, width-xLimit, barHeight);
+  ctx.fillRect(xLimit, y, width - xLimit, barHeight);
 
   ctx.restore();
 }
