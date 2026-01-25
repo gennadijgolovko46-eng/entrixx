@@ -1,9 +1,19 @@
 // trades_from_hyperliquid.js
+//
+// Frontend contract:
+// loadDataFromHyperliquid(account) -> { fills: [], trades: [...] }
+//
+// This module loads trades from your worker:
+//   GET /trades?account=...&scope=coin
+//
+// It throws a useful error if HTTP is not ok or JSON is broken.
 
 const API = "https://eze-fa50.gennadijgolovko46.workers.dev";
 
 async function fetchJsonHard(url) {
   const r = await fetch(url, { method: "GET" });
+
+  // Read as text first so we can show diagnostics on BAD JSON / non-JSON responses
   const text = await r.text();
 
   if (!r.ok) {
