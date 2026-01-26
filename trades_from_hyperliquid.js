@@ -5,7 +5,7 @@
 
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
-// seconds/ms normalization (same as index)
+// seconds/ms normalization
 function toMs(v){
   const n = Number(v);
   if (!Number.isFinite(n)) return NaN;
@@ -19,37 +19,39 @@ export async function loadDataFromHyperliquid(account) {
   const acc = String(account || "").trim();
   if (!acc) return { fills: [], trades: [] };
 
-  const url = `${API}/trades?account=${encodeURIComponent(acc)}&scope=coin`;
+  // CACHE BUSTER — CRITICAL
+  const url =
+    `${API}/trades` +
+    `?account=${encodeURIComponent(acc)}` +
+    `&scope=coin` +
+    `&_=${Date.now()}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   let r;
   try {
-    r = await fetch(url, {
-      method: "GET",
-      signal: controller.signal
-    });
+    r = await fetch(url, { method: "GET", signal: controller.signal });
   } catch (e) {
-    const msg =
-      e && e.name === "AbortError"
-        ? `Timeout ${FETCH_TIMEOUT_MS}ms while fetching trades`
-        : `Network error while fetching trades`;
-    throw new Error(msg);
+    throw new Error(
+      e?.name === "AbortError"
+        ? `Timeout ${FETCH_TIMEOUT_MS}ms`
+        : "Network error"
+    );
   } finally {
     clearTimeout(timer);
   }
 
   if (!r.ok) {
     const text = await r.text().catch(() => "");
-    throw new Error(`HTTP ${r.status} while fetching trades\n${text.slice(0, 200)}`);
+    throw new Error(`HTTP ${r.status}\n${text.slice(0,200)}`);
   }
 
   const j = await r.json();
   const trades = Array.isArray(j?.trades) ? j.trades : [];
 
-  // stabilize order by exit time
-  trades.sort((a, b) => toMs(a.exit_time) - toMs(b.exit_time));
+  // stable order
+  trades.sort((a,b) => toMs(a.exit_time) - toMs(b.exit_time));
 
   return { fills: [], trades };
 }
