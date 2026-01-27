@@ -1,51 +1,114 @@
 // behaviorArrow.js
-// Draws a gauge-like wedge arrow (automotive style)
+// Behavior Arrow — SAFE + VERTICAL (up/down), zero-deps, no side effects.
+// Contract: drawBehaviorArrow(ctx, { value, frozen, width, height })
+// value must be normalized [-1..1] by index (computeBehavior). We only render.
 
-export function drawBehaviorArrow(ctx, {
-  value,        // normalized value in range [-1..1]
-  frozen,       // boolean
-  width,
-  height
-}) {
-  const cx = 28;              // anchor from left
-  const cy = height * 0.5;    // vertical center
+export function drawBehaviorArrow(ctx, { value, frozen, width, height }) {
+  // ---- hard safety (never throw) ----
+  try {
+    if (!ctx || !Number.isFinite(width) || !Number.isFinite(height)) return;
 
-  const MAX_ANGLE = Math.PI / 4;   // ±45°
-  const angle = Math.max(-MAX_ANGLE, Math.min(MAX_ANGLE, value * MAX_ANGLE));
+    // normalize + clamp
+    const v0 = Number(value);
+    const v = Number.isFinite(v0) ? Math.max(-1, Math.min(1, v0)) : 0;
 
-  const LEN = 96;             // arrow length (≈2x previous)
-  const BASE_W = 6;           // base thickness
-  const TIP_W = 1.2;          // tip thickness
+    // Placement: centered horizontally, near bottom (as you requested)
+    const cx = width * 0.5;
+    const cy = height - 70; // bottom anchor, above date line
+    const radius = 44;
 
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(angle);
+    // Vertical behavior: UP = +1 (you control), DOWN = -1 (market controls)
+    const MAX_ANGLE = Math.PI / 2; // 90 degrees total range
+    const angle = (-v) * MAX_ANGLE; // v>0 => rotate upward (negative angle in canvas)
 
-  // ---- axis circle ----
-  ctx.fillStyle = frozen
-    ? "rgba(120,120,120,0.25)"
-    : "rgba(120,120,120,0.35)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 6, 0, Math.PI * 2);
-  ctx.fill();
+    // Visual tuning (kept minimal, safe)
+    const alpha = frozen ? 0.28 : 0.80;
+    const strokeAlpha = frozen ? 0.10 : 0.18;
 
-  // ---- wedge arrow ----
-  const grad = ctx.createLinearGradient(0, 0, LEN, 0);
-  grad.addColorStop(0, frozen
-    ? "rgba(140,140,140,0.30)"
-    : "rgba(140,140,140,0.45)");
-  grad.addColorStop(1, frozen
-    ? "rgba(160,160,160,0.20)"
-    : "rgba(160,160,160,0.35)");
+    // Color: negative -> amber, zero -> gray, positive -> teal (useful, not tied to tails)
+    function mix(a, b, t) { return a + (b - a) * t; }
+    function rgb(r, g, b) {
+      r = Math.round(Math.max(0, Math.min(255, r)));
+      g = Math.round(Math.max(0, Math.min(255, g)));
+      b = Math.round(Math.max(0, Math.min(255, b)));
+      return `rgb(${r},${g},${b})`;
+    }
 
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(0, -BASE_W / 2);
-  ctx.lineTo(LEN, -TIP_W / 2);
-  ctx.lineTo(LEN,  TIP_W / 2);
-  ctx.lineTo(0,  BASE_W / 2);
-  ctx.closePath();
-  ctx.fill();
+    let col;
+    if (v < 0) {
+      // gray -> amber as v goes 0..-1
+      const t = Math.min(1, Math.max(0, -v));
+      col = rgb(
+        mix(180, 255, t),   // r
+        mix(180, 191, t),   // g
+        mix(180,   0, t)    // b
+      );
+    } else {
+      // gray -> teal as v goes 0..+1
+      const t = Math.min(1, Math.max(0, v));
+      col = rgb(
+        mix(180,  45, t),   // r
+        mix(180, 180, t),   // g
+        mix(180, 170, t)    // b
+      );
+    }
 
-  ctx.restore();
+    ctx.save();
+
+    // ---- subtle gauge arc (bottom semi-circle) ----
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(0,0,0,${strokeAlpha})`;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // ---- center hub ----
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = frozen ? "rgba(0,0,0,0.08)" : "rgba(0,0,0,0.12)";
+    ctx.fill();
+
+    // ---- arrow needle (diamond pointer) ----
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = col;
+
+    // mild glow only when not frozen (keeps it readable but not heavy)
+    if (!frozen) {
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = col;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    // Needle geometry (vertical, pointing up when v=+1)
+    // Tip goes to -radius; small diamond near center.
+    const tipY = -radius;
+    const baseY = 10;
+
+    ctx.beginPath();
+    ctx.moveTo(0, tipY);      // tip
+    ctx.lineTo(5, 0);         // right mid
+    ctx.lineTo(0, baseY);     // bottom
+    ctx.lineTo(-5, 0);        // left mid
+    ctx.closePath();
+    ctx.fill();
+
+    // ---- optional tiny neutral tick at center (helps read "0") ----
+    ctx.globalAlpha = frozen ? 0.16 : 0.22;
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-8, 0);
+    ctx.lineTo(8, 0);
+    ctx.stroke();
+
+    ctx.restore();
+  } catch (_) {
+    // absolute safety: never break index render loop
+    return;
+  }
 }
