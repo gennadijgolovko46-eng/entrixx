@@ -73,7 +73,7 @@ canvas{display:block;touch-action:none}
 <script type="module">
 /* ===== Safe module import with version pin =====
    Bump V on deploy. This is your cache breaker. */
-const V = "idx-safe-17";
+const V = "idx-safe-18";
 
 /* Optional: ?safe=1 disables all tails (/market_window) calls */
 const qs0 = new URLSearchParams(location.search);
@@ -395,16 +395,52 @@ async function init(){
 }
 await init();
 
-// ---------------- per-day recompute ----------------
+/* ============================================================
+   BEHAVIOR SIGNAL (keeps your existing meaning, just safer)
+   - STILL uses only hold-time (no tails / no market_window)
+   - Window = current day (dayTrades), cut by efficiency.limitTime
+   - Output normalized to [-1..1] => "I control" vs "market controls"
+   - Safer: robust stats (median/MAD), bounded, no NaN explosions
+   ============================================================ */
 function computeBehavior(dayTrades, eff){
-  let v = 0;
+  if(!dayTrades || dayTrades.length === 0) return 0;
+
+  const vals = [];
   for(const t of dayTrades){
     if(eff.limitTime && toMs(t.exit_time) > eff.limitTime) break;
+
     const hms = holdMsAtom(t);
-    const holdMin = Number.isFinite(hms) ? (hms / 60000) : 0;
-    v += Math.max(-1, Math.min(1, holdMin - 160));
+    if(!Number.isFinite(hms)) continue;
+
+    // minutes held (your current "behavior axis")
+    vals.push(hms / 60000);
   }
-  return Math.max(-1, Math.min(1, v/12));
+  if(vals.length === 0) return 0;
+
+  // median
+  vals.sort((a,b)=>a-b);
+  const mid = Math.floor(vals.length/2);
+  const median = (vals.length % 2) ? vals[mid] : (vals[mid-1] + vals[mid]) / 2;
+
+  // MAD (median absolute deviation) for robustness
+  const dev = vals.map(x => Math.abs(x - median)).sort((a,b)=>a-b);
+  const mad = (dev.length % 2) ? dev[mid] : (dev[mid-1] + dev[mid]) / 2;
+
+  // Convert to a normalized score:
+  // - If median hold >> baseline => tends to "frozen / market controls" (negative)
+  // - If median hold << baseline => tends to "you control" (positive)
+  // Baseline in minutes: keep your old pivot ~160m, but soften with robust scale.
+  const BASELINE = 160; // same semantic pivot as before
+
+  // scale: if MAD is tiny, avoid division by near-zero
+  const scale = Math.max(20, mad * 1.4826); // ~robust sigma, min 20m
+
+  // z-score but clamped
+  const z = (median - BASELINE) / scale; // >0 => holds longer than baseline
+  // map: longer hold => market controls => negative
+  const v = Math.max(-1, Math.min(1, -z));
+
+  return v;
 }
 
 /* =========================
