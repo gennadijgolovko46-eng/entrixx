@@ -56,7 +56,7 @@ canvas{display:block;touch-action:none}
 <div id="details"></div>
 <div id="debug" class="hidden"></div>
 
-<!-- error surface (NO white screen) -->
+<!-- error surface (no white screen) -->
 <script>
 (function(){
   const detailsEl = document.getElementById("details");
@@ -73,7 +73,7 @@ canvas{display:block;touch-action:none}
 <script type="module">
 /* ===== Safe module import with version pin =====
    Bump V on deploy. This is your cache breaker. */
-const V = "idx-safe-15";
+const V = "idx-safe-17";
 
 /* Optional: ?safe=1 disables all tails (/market_window) calls */
 const qs0 = new URLSearchParams(location.search);
@@ -171,11 +171,16 @@ function dayFloorUTC(t){
 function clamp(min,v,max){ return Math.max(min, Math.min(max, v)); }
 function num(x){ const v = Number(x); return Number.isFinite(v) ? v : NaN; }
 
-// seconds/ms normalization (CRITICAL)
+// seconds/ms normalization (critical)
 function toMs(v){
   const n = Number(v);
   if(!Number.isFinite(n)) return NaN;
   return (n > 0 && n < 1e12) ? n * 1000 : n;
+}
+
+// NaN-safe helper for sorts only
+function numOrInf(x, inf = Infinity){
+  return Number.isFinite(x) ? x : inf;
 }
 
 function formatTime(t){
@@ -223,7 +228,7 @@ function coinLabel(t){
   return { label: "Market", value: "n/a" };
 }
 
-// STRICT RULE: atom = closed trade (full hold)
+// strict rule: atom = closed trade (full hold)
 function holdMsAtom(t){
   const entry = toMs(t.entry_time);
   const exit  = toMs(t.exit_time);
@@ -232,25 +237,28 @@ function holdMsAtom(t){
   return (Number.isFinite(ms) && ms >= 0) ? ms : NaN;
 }
 
+/* =========================
+   DAY FILTER (atom belongs to day by exit_time only)
+   ========================= */
 function tradesForDay(d0){
   const d1 = d0 + DAY;
-  return trades.filter(t =>
-    toMs(t.exit_time) > d0 &&
-    toMs(t.entry_time) < d1
-  );
+  return trades.filter(t => {
+    const x = toMs(t.exit_time);
+    return Number.isFinite(x) && x >= d0 && x < d1;
+  });
 }
 
 /* =========================
-   SORTING POLICY (optimal & safe)
-   - Always apply ONE canonical sort after load (idempotent).
-   - Guarantees stable render & flip detection across browsers.
+   SORTING POLICY (NaN-safe canonical sort)
    ========================= */
 function canonSortTrades(arr){
   arr.sort((a,b)=>{
-    const ax = toMs(a.exit_time), bx = toMs(b.exit_time);
+    const ax = numOrInf(toMs(a.exit_time));
+    const bx = numOrInf(toMs(b.exit_time));
     if(ax !== bx) return ax - bx;
 
-    const ae = toMs(a.entry_time), be = toMs(b.entry_time);
+    const ae = numOrInf(toMs(a.entry_time));
+    const be = numOrInf(toMs(b.entry_time));
     if(ae !== be) return ae - be;
 
     const ac = String(a.coin ?? ""), bc = String(b.coin ?? "");
@@ -373,8 +381,9 @@ async function init(){
   // canonical stable ordering (idempotent even if loader already sorted)
   canonSortTrades(trades);
 
+  // FIX 6.1: day range must be based on exit_time (atoms are closed trades)
   let minT = Infinity;
-  for(const t of trades) minT = Math.min(minT, toMs(t.entry_time));
+  for(const t of trades) minT = Math.min(minT, toMs(t.exit_time));
 
   const startDay = dayFloorUTC(minT);
   const endDay   = dayFloorUTC(Date.now());
@@ -398,13 +407,16 @@ function computeBehavior(dayTrades, eff){
   return Math.max(-1, Math.min(1, v/12));
 }
 
+/* =========================
+   FLIP DETECTION (NaN-safe sort + NaN-safe price compare)
+   ========================= */
 function markFlipOpen(dayTrades){
   for(const t of dayTrades) t._flipOpen = false;
 
-  // local sort for flip detection only
+  // NaN-safe local sort for flip detection only
   dayTrades.sort((a,b)=>
-    (toMs(a.entry_time) - toMs(b.entry_time)) ||
-    (toMs(a.exit_time)  - toMs(b.exit_time))
+    (numOrInf(toMs(a.entry_time)) - numOrInf(toMs(b.entry_time))) ||
+    (numOrInf(toMs(a.exit_time))  - numOrInf(toMs(b.exit_time)))
   );
 
   const EPS_T = 2;      // ms tolerance
@@ -416,20 +428,19 @@ function markFlipOpen(dayTrades){
 
     const prevExitT = toMs(prev.exit_time);
     const curEntryT = toMs(cur.entry_time);
+    if(!Number.isFinite(prevExitT) || !Number.isFinite(curEntryT)) continue;
+    if(Math.abs(prevExitT - curEntryT) > EPS_T) continue;
 
     const prevExitPx = Number(prev.exit_price);
     const curEntryPx = Number(cur.entry_price);
 
-    if(!Number.isFinite(prevExitT) || !Number.isFinite(curEntryT)) continue;
-    if(Math.abs(prevExitT - curEntryT) > EPS_T) continue;
-
+    // NaN-safe: if any px missing -> do not block flip
     const priceMatch =
-      Number.isFinite(prevExitPx) && Number.isFinite(curEntryPx)
-        ? Math.abs(prevExitPx - curEntryPx) <= EPS_P
+      (Number.isFinite(prevExitPx) && Number.isFinite(curEntryPx))
+        ? (Math.abs(prevExitPx - curEntryPx) <= EPS_P)
         : true;
 
     const dirFlip = (Number(prev.dir) === -Number(cur.dir));
-
     if(priceMatch && dirFlip) cur._flipOpen = true;
   }
 }
