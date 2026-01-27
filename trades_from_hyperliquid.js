@@ -5,14 +5,22 @@
 
 const API = "https://twilight-breeze-fa50.gennadijgolovko46.workers.dev";
 
-// seconds/ms normalization (same as index)
+// seconds/ms normalization (safe if worker ever returns seconds)
 function toMs(v){
   const n = Number(v);
   if (!Number.isFinite(n)) return NaN;
   return (n > 0 && n < 1e12) ? n * 1000 : n;
 }
 
-// ===== SAFE WINDOW (chunked backfill) =====
+function numOrInf(x, inf = Infinity){
+  return Number.isFinite(x) ? x : inf;
+}
+
+function numOr0(x){
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // one request = 60 days (light load)
@@ -22,12 +30,12 @@ const WINDOW_MS  = CHUNK_DAYS * DAY_MS;
 // backfill to correctly open/close trades near window edges
 const LEAD_MS = 7 * DAY_MS;
 
-// per-request limits
+// per-request limits (must match worker clamps)
 const MAX_FILLS  = 8000;
 const MAX_TRADES = 5000;
 
-// desired history depth (~11 months)
-const TARGET_DAYS = 330;
+// aligned with worker retention (90d)
+const TARGET_DAYS = 90;
 const MAX_CHUNKS  = Math.ceil(TARGET_DAYS / CHUNK_DAYS);
 
 // client-side timeout
@@ -69,24 +77,41 @@ async function fetchTradesChunk(acc, anchorMs){
   return Array.isArray(j?.trades) ? j.trades : [];
 }
 
-// stable deduplication key for merging windows
+// Dedup key: prefer worker-provided stable id (zero-risk).
+// Fallback stays stable if id is missing (older worker).
 function tradeKey(t){
-  const et = Math.floor(toMs(t.entry_time));
-  const xt = Math.floor(toMs(t.exit_time));
+  const id = String(t?.id || "").trim();
+  if (id) return `id:${id}`;
+
+  const etMs = toMs(t.entry_time);
+  const xtMs = toMs(t.exit_time);
+
+  const et = Number.isFinite(etMs) ? Math.floor(etMs) : 0;
+  const xt = Number.isFinite(xtMs) ? Math.floor(xtMs) : 0;
+
   const c  = String(t.coin ?? "");
   const d  = Number(t.dir) || 0;
-  const ep = Number(t.entry_price) || 0;
-  const xp = Number(t.exit_price) || 0;
-  return `${c}|${d}|${et}|${xt}|${ep}|${xp}`;
+
+  const s = numOr0(t.size ?? t.qty);
+  const sKey = s ? s.toFixed(10) : "0";
+
+  const ep = numOr0(t.entry_price);
+  const xp = numOr0(t.exit_price);
+  const epKey = ep ? ep.toFixed(12) : "0";
+  const xpKey = xp ? xp.toFixed(12) : "0";
+
+  return `fb:${c}|${d}|${et}|${xt}|${sKey}|${epKey}|${xpKey}`;
 }
 
-// canonical stable sort
+// canonical stable sort (NaN-safe via numOrInf)
 function canonSortTrades(arr){
   arr.sort((a,b)=>{
-    const ax = toMs(a.exit_time), bx = toMs(b.exit_time);
+    const ax = numOrInf(toMs(a.exit_time));
+    const bx = numOrInf(toMs(b.exit_time));
     if(ax !== bx) return ax - bx;
 
-    const ae = toMs(a.entry_time), be = toMs(b.entry_time);
+    const ae = numOrInf(toMs(a.entry_time));
+    const be = numOrInf(toMs(b.entry_time));
     if(ae !== be) return ae - be;
 
     const ac = String(a.coin ?? ""), bc = String(b.coin ?? "");
@@ -111,34 +136,43 @@ export async function loadDataFromHyperliquid(account){
 
   // start from "now" to guarantee latest days
   let anchor = Date.now();
+  let lastAnchor = anchor;
+
   const out = [];
   const seen = new Set();
+
+  // incremental oldest tracking (avoids O(n^2))
+  let oldestEntry = Infinity;
 
   for(let i = 0; i < MAX_CHUNKS; i++){
     const chunk = await fetchTradesChunk(acc, anchor);
     if(!chunk.length) break;
 
-    // merge with deduplication
     for(const t of chunk){
       const k = tradeKey(t);
       if(seen.has(k)) continue;
       seen.add(k);
       out.push(t);
-    }
 
-    // move anchor backward using earliest entry_time in this chunk
-    let minEntry = Infinity;
-    for(const t of chunk){
       const e = toMs(t.entry_time);
-      if(Number.isFinite(e)) minEntry = Math.min(minEntry, e);
+      if(Number.isFinite(e)) oldestEntry = Math.min(oldestEntry, e);
     }
 
-    if(!Number.isFinite(minEntry) || minEntry === Infinity) break;
-    anchor = minEntry - 1;
+    // IMPORTANT: move anchor by MIN exit_time (leadMs can push entry_time far earlier than the window)
+    let minExit = Infinity;
+    for(const t of chunk){
+      const x = toMs(t.exit_time);
+      if(Number.isFinite(x)) minExit = Math.min(minExit, x);
+    }
+    if(!Number.isFinite(minExit) || minExit === Infinity) break;
 
-    // stop if target history depth reached
-    const oldest = Math.min(...out.map(t => toMs(t.entry_time)).filter(Number.isFinite));
-    if(Number.isFinite(oldest) && (Date.now() - oldest) >= TARGET_DAYS * DAY_MS) break;
+    const nextAnchor = minExit - 1;
+    if(!(nextAnchor < lastAnchor)) break; // must move backward
+    anchor = nextAnchor;
+    lastAnchor = anchor;
+
+    // stop by achieved history depth (by entry_time)
+    if(Number.isFinite(oldestEntry) && (Date.now() - oldestEntry) >= TARGET_DAYS * DAY_MS) break;
   }
 
   canonSortTrades(out);
