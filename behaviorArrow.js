@@ -1,114 +1,183 @@
 // behaviorArrow.js
-// Behavior Arrow — SAFE + VERTICAL (up/down), zero-deps, no side effects.
-// Contract: drawBehaviorArrow(ctx, { value, frozen, width, height })
-// value must be normalized [-1..1] by index (computeBehavior). We only render.
+// Honest & useful behavior arrow (LEFT/RIGHT gauge)
+// - Does NOT use tails / market_window
+// - Expects `value` in [-1..1] from index (computeBehavior)
+//   value < 0 => market controls you (LEFT / amber)
+//   value = 0 => neutral (UP / gray)
+//   value > 0 => you control the market (RIGHT / teal)
+// - "Honesty": intensity & thickness follow |value|
+// - Ultra-safe: clamps, NaN guards, try/catch, no deps
+
+function clamp(min, v, max) {
+  return Math.max(min, Math.min(max, v));
+}
+function finiteOr(v, fallback) {
+  return Number.isFinite(v) ? v : fallback;
+}
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Visual only: stronger response near edges, gentle near center
+function easeOut(v) {
+  const s = clamp(-1, v, 1);
+  const a = Math.abs(s);
+  const e = 1 - Math.pow(1 - a, 2.2);
+  return Math.sign(s) * e;
+}
+
+// Color: amber (-1) -> gray (0) -> teal (+1)
+function valueToColor(v) {
+  const x = clamp(-1, finiteOr(v, 0), 1);
+
+  // -1: (255,191,0)
+  //  0: (180,180,180)
+  // +1: (45,180,170)
+  let r, g, b;
+
+  if (x < 0) {
+    const t = Math.abs(x);
+    r = lerp(180, 255, t);
+    g = lerp(180, 191, t);
+    b = lerp(180,   0, t);
+  } else {
+    const t = x;
+    r = lerp(180,  45, t);
+    g = lerp(180, 180, t);
+    b = lerp(180, 170, t);
+  }
+
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+}
 
 export function drawBehaviorArrow(ctx, { value, frozen, width, height }) {
-  // ---- hard safety (never throw) ----
+  // ABSOLUTE SAFETY: never throw, never break render loop
   try {
-    if (!ctx || !Number.isFinite(width) || !Number.isFinite(height)) return;
+    if (!ctx || typeof ctx.save !== "function") return;
 
-    // normalize + clamp
-    const v0 = Number(value);
-    const v = Number.isFinite(v0) ? Math.max(-1, Math.min(1, v0)) : 0;
+    const W = finiteOr(width, 0);
+    const H = finiteOr(height, 0);
+    if (!(W > 0 && H > 0)) return;
 
-    // Placement: centered horizontally, near bottom (as you requested)
-    const cx = width * 0.5;
-    const cy = height - 70; // bottom anchor, above date line
-    const radius = 44;
+    // Placement
+    const cx = W * 0.5;
+    const cy = H - 74; // above date
+    const R = 54;
 
-    // Vertical behavior: UP = +1 (you control), DOWN = -1 (market controls)
-    const MAX_ANGLE = Math.PI / 2; // 90 degrees total range
-    const angle = (-v) * MAX_ANGLE; // v>0 => rotate upward (negative angle in canvas)
+    const raw = clamp(-1, finiteOr(value, 0), 1);
+    const eased = easeOut(raw);
 
-    // Visual tuning (kept minimal, safe)
-    const alpha = frozen ? 0.28 : 0.80;
-    const strokeAlpha = frozen ? 0.10 : 0.18;
+    // If frozen => tone down intensity (UI only)
+    const frozenK = frozen ? 0.65 : 1.0;
 
-    // Color: negative -> amber, zero -> gray, positive -> teal (useful, not tied to tails)
-    function mix(a, b, t) { return a + (b - a) * t; }
-    function rgb(r, g, b) {
-      r = Math.round(Math.max(0, Math.min(255, r)));
-      g = Math.round(Math.max(0, Math.min(255, g)));
-      b = Math.round(Math.max(0, Math.min(255, b)));
-      return `rgb(${r},${g},${b})`;
-    }
+    // CONFIDENCE = |value|
+    const conf = clamp(0, Math.abs(raw), 1);
 
-    let col;
-    if (v < 0) {
-      // gray -> amber as v goes 0..-1
-      const t = Math.min(1, Math.max(0, -v));
-      col = rgb(
-        mix(180, 255, t),   // r
-        mix(180, 191, t),   // g
-        mix(180,   0, t)    // b
-      );
-    } else {
-      // gray -> teal as v goes 0..+1
-      const t = Math.min(1, Math.max(0, v));
-      col = rgb(
-        mix(180,  45, t),   // r
-        mix(180, 180, t),   // g
-        mix(180, 170, t)    // b
-      );
-    }
+    // LEFT/RIGHT mapping across semicircle:
+    // left end = π, top = 1.5π, right end = 2π
+    const TOP = Math.PI * 1.5;
+    const MAX_SWEEP = Math.PI * 0.5;
+    const angle = TOP + eased * MAX_SWEEP;
+
+    const color = valueToColor(raw);
+
+    const arcAlpha = frozen ? 0.05 : 0.07;
+    const baseAlpha = lerp(0.22, 0.95, conf) * frozenK;
+    const glowAlpha = lerp(0.10, 0.55, conf) * frozenK;
+    const arrowAlpha = lerp(0.20, 0.92, conf) * frozenK;
 
     ctx.save();
+    ctx.translate(cx, cy);
 
-    // ---- subtle gauge arc (bottom semi-circle) ----
+    // --- arc ---
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI);
-    ctx.strokeStyle = `rgba(0,0,0,${strokeAlpha})`;
+    ctx.arc(0, 0, R, Math.PI, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(0,0,0,${arcAlpha})`;
     ctx.lineWidth = 4;
     ctx.stroke();
 
-    // ---- center hub ----
-    ctx.beginPath();
-    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-    ctx.fillStyle = frozen ? "rgba(0,0,0,0.08)" : "rgba(0,0,0,0.12)";
-    ctx.fill();
+    // --- ticks ---
+    ctx.save();
+    ctx.strokeStyle = "rgba(0,0,0,0.10)";
+    ctx.lineWidth = 2;
 
-    // ---- arrow needle (diamond pointer) ----
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
-
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = col;
-
-    // mild glow only when not frozen (keeps it readable but not heavy)
-    if (!frozen) {
-      ctx.shadowBlur = 14;
-      ctx.shadowColor = col;
-    } else {
-      ctx.shadowBlur = 0;
+    function tick(atAngle, len) {
+      const x0 = Math.cos(atAngle) * (R - len);
+      const y0 = Math.sin(atAngle) * (R - len);
+      const x1 = Math.cos(atAngle) * (R + 2);
+      const y1 = Math.sin(atAngle) * (R + 2);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
     }
 
-    // Needle geometry (vertical, pointing up when v=+1)
-    // Tip goes to -radius; small diamond near center.
-    const tipY = -radius;
-    const baseY = 10;
+    tick(Math.PI, 10);
+    tick(TOP, 14);
+    tick(Math.PI * 2, 10);
+    ctx.restore();
+
+    // --- sector fill ---
+    if (raw !== 0) {
+      ctx.save();
+      ctx.globalAlpha = baseAlpha * 0.25;
+      ctx.fillStyle = color;
+
+      const a0 = TOP;
+      const a1 = TOP + raw * MAX_SWEEP;
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, R - 7, a0, a1, raw < 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // --- hub ---
+    ctx.beginPath();
+    ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = frozen
+      ? "rgba(120,120,120,0.22)"
+      : "rgba(120,120,120,0.30)";
+    ctx.fill();
+
+    // --- needle ---
+    ctx.save();
+    ctx.rotate(angle - TOP);
+
+    const needleLen = 62;
+    const needleW = lerp(3.0, 7.0, conf);
+
+    // glow
+    ctx.globalAlpha = glowAlpha;
+    ctx.shadowBlur = lerp(0, 18, conf);
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
 
     ctx.beginPath();
-    ctx.moveTo(0, tipY);      // tip
-    ctx.lineTo(5, 0);         // right mid
-    ctx.lineTo(0, baseY);     // bottom
-    ctx.lineTo(-5, 0);        // left mid
+    ctx.moveTo(0, -needleLen);
+    ctx.lineTo( needleW, 0);
+    ctx.lineTo(0, 10);
+    ctx.lineTo(-needleW, 0);
     ctx.closePath();
     ctx.fill();
 
-    // ---- optional tiny neutral tick at center (helps read "0") ----
-    ctx.globalAlpha = frozen ? 0.16 : 0.22;
+    // solid
+    ctx.globalAlpha = arrowAlpha;
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.lineWidth = 2;
+
     ctx.beginPath();
-    ctx.moveTo(-8, 0);
-    ctx.lineTo(8, 0);
-    ctx.stroke();
+    ctx.moveTo(0, -needleLen);
+    ctx.lineTo( needleW * 0.85, 0);
+    ctx.lineTo(0, 9);
+    ctx.lineTo(-needleW * 0.85, 0);
+    ctx.closePath();
+    ctx.fill();
 
     ctx.restore();
+    ctx.restore();
   } catch (_) {
-    // absolute safety: never break index render loop
     return;
   }
 }
