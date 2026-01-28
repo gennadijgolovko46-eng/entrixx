@@ -13,6 +13,21 @@ canvas{display:block;touch-action:none}
   position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
   font:12px system-ui,sans-serif;color:rgba(0,0,0,.45)
 }
+
+/* ✅ truncated flag (muted, above date) */
+#trunc{
+  position:fixed;bottom:34px;left:50%;transform:translateX(-50%);
+  font:12px system-ui,sans-serif;
+  color:rgba(0,0,0,.35);
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .14s ease;
+  text-align:center;
+  max-width:92vw;
+  white-space:pre-wrap;
+}
+#trunc.show{opacity:1}
+
 #time{
   position:fixed;top:8px;left:50%;transform:translateX(-50%);
   font:12px system-ui,sans-serif;color:rgba(0,0,0,.9);
@@ -52,6 +67,7 @@ canvas{display:block;touch-action:none}
 <body>
 <canvas id="c"></canvas>
 <div id="time"></div>
+<div id="trunc"></div>
 <div id="date"></div>
 <div id="details"></div>
 <div id="debug" class="hidden"></div>
@@ -73,7 +89,7 @@ canvas{display:block;touch-action:none}
 <script type="module">
 /* ===== Safe module import with version pin =====
    Bump V on deploy. This is your cache breaker. */
-const V = "idx-safe-19";
+const V = "idx-safe-21"; // ✅ bumped (cache break)
 
 /* Optional: ?safe=1 disables all tails (/market_window) calls */
 const qs0 = new URLSearchParams(location.search);
@@ -127,6 +143,7 @@ let selectedDetailsText = "";
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const dateEl = document.getElementById("date");
+const truncEl = document.getElementById("trunc");
 const timeEl = document.getElementById("time");
 const detailsEl = document.getElementById("details");
 const debugEl = document.getElementById("debug");
@@ -157,6 +174,10 @@ let arrowValue = 0;
 let frozen = false;
 
 let startX=null, currentX=null, isDown=false;
+
+// ✅ truncated flag from loader
+let truncated = false;
+let meta = null;
 
 // cache market window results: key = coin|exit_time
 const marketCache = new Map();
@@ -196,6 +217,13 @@ function formatDateTimeUTC(t){
   const hh = String(d.getUTCHours()).padStart(2,"0");
   const mm = String(d.getUTCMinutes()).padStart(2,"0");
   return `${Y}-${M}-${D} ${hh}:${mm}Z`;
+}
+function formatDateUTC(d0){
+  const d = new Date(d0);
+  const Y = d.getUTCFullYear();
+  const M = String(d.getUTCMonth()+1).padStart(2,"0");
+  const D = String(d.getUTCDate()).padStart(2,"0");
+  return `${Y}-${M}-${D} UTC`;
 }
 function formatHold(ms){
   if(!Number.isFinite(ms) || ms < 0) return "n/a";
@@ -356,6 +384,23 @@ async function hydrateMarketForDay(dayTrades){
   }
 }
 
+// ✅ truncated banner (fixed wording to avoid "5000/5000" oddness)
+function updateTruncBanner(){
+  if(!truncated){
+    truncEl.textContent = "";
+    truncEl.classList.remove("show");
+    return;
+  }
+
+  const maxT = Number(meta?.maxTrades) || 5000;
+  const days = Number(meta?.windowDays) || 90;
+
+  // muted + honest
+  truncEl.textContent =
+    `LIMIT REACHED: showing latest ${maxT} trades (last ${days}d).`;
+  truncEl.classList.add("show");
+}
+
 // ---------------- init ----------------
 async function init(){
   let data;
@@ -371,6 +416,12 @@ async function init(){
   trades = data.trades || [];
   fills  = data.fills  || [];
 
+  // ✅ get truncated/meta from loader (safe even if missing)
+  truncated = !!data.truncated;
+  meta = data.meta || null;
+
+  updateTruncBanner();
+
   if(!trades.length){
     dateEl.textContent = "No trades";
     detailsEl.textContent = "No trades returned.";
@@ -381,7 +432,7 @@ async function init(){
   // canonical stable ordering (idempotent even if loader already sorted)
   canonSortTrades(trades);
 
-  // FIX 6.1: day range must be based on exit_time (atoms are closed trades)
+  // day range must be based on exit_time (atoms are closed trades)
   let minT = Infinity;
   for(const t of trades) minT = Math.min(minT, toMs(t.exit_time));
 
@@ -397,66 +448,48 @@ await init();
 
 /* ============================================================
    BEHAVIOR SIGNAL (keeps your existing meaning, just safer)
-   - STILL uses only hold-time (no tails / no market_window)
-   - Window = current day (dayTrades), cut by efficiency.limitTime
-   - Output normalized to [-1..1] => "I control" vs "market controls"
-   - Safer: robust stats (median/MAD), bounded, no NaN explosions
    ============================================================ */
 function computeBehavior(dayTrades, eff){
   if(!dayTrades || dayTrades.length === 0) return 0;
 
   const vals = [];
   for(const t of dayTrades){
-    // MUST-HAVE FIX: was "break" -> now "continue"
     if(eff.limitTime && toMs(t.exit_time) > eff.limitTime) continue;
 
     const hms = holdMsAtom(t);
     if(!Number.isFinite(hms)) continue;
 
-    // minutes held (your current "behavior axis")
     vals.push(hms / 60000);
   }
   if(vals.length === 0) return 0;
 
-  // median
   vals.sort((a,b)=>a-b);
   const mid = Math.floor(vals.length/2);
   const median = (vals.length % 2) ? vals[mid] : (vals[mid-1] + vals[mid]) / 2;
 
-  // MAD (median absolute deviation) for robustness
   const dev = vals.map(x => Math.abs(x - median)).sort((a,b)=>a-b);
   const mad = (dev.length % 2) ? dev[mid] : (dev[mid-1] + dev[mid]) / 2;
 
-  // Convert to a normalized score:
-  // - If median hold >> baseline => tends to "frozen / market controls" (negative)
-  // - If median hold << baseline => tends to "you control" (positive)
-  // Baseline in minutes: keep your old pivot ~160m, but soften with robust scale.
-  const BASELINE = 160; // same semantic pivot as before
+  const BASELINE = 160;
+  const scale = Math.max(20, mad * 1.4826);
 
-  // scale: if MAD is tiny, avoid division by near-zero
-  const scale = Math.max(20, mad * 1.4826); // ~robust sigma, min 20m
-
-  // z-score but clamped
-  const z = (median - BASELINE) / scale; // >0 => holds longer than baseline
-  // map: longer hold => market controls => negative
+  const z = (median - BASELINE) / scale;
   const v = Math.max(-1, Math.min(1, -z));
-
   return v;
 }
 
 /* =========================
-   FLIP DETECTION (NaN-safe sort + NaN-safe price compare)
+   FLIP DETECTION
    ========================= */
 function markFlipOpen(dayTrades){
   for(const t of dayTrades) t._flipOpen = false;
 
-  // NaN-safe local sort for flip detection only
   dayTrades.sort((a,b)=>
     (numOrInf(toMs(a.entry_time)) - numOrInf(toMs(b.entry_time))) ||
     (numOrInf(toMs(a.exit_time))  - numOrInf(toMs(b.exit_time)))
   );
 
-  const EPS_T = 2;      // ms tolerance
+  const EPS_T = 2;
   const EPS_P = 1e-9;
 
   for(let i=1;i<dayTrades.length;i++){
@@ -471,7 +504,6 @@ function markFlipOpen(dayTrades){
     const prevExitPx = Number(prev.exit_price);
     const curEntryPx = Number(cur.entry_price);
 
-    // NaN-safe: if any px missing -> do not block flip
     const priceMatch =
       (Number.isFinite(prevExitPx) && Number.isFinite(curEntryPx))
         ? (Math.abs(prevExitPx - curEntryPx) <= EPS_P)
@@ -572,6 +604,9 @@ function setBaseDebugText(){
     "v: " + V + "\n" +
     "safe: " + (SAFE_MODE ? "1" : "0") + "\n" +
     "account: " + ACCOUNT + "\n" +
+    "truncated: " + (truncated ? "1" : "0") + "\n" +
+    "meta.maxTrades: " + (meta?.maxTrades ?? "n/a") + "\n" +
+    "meta.tradesCount: " + (meta?.tradesCount ?? "n/a") + "\n" +
     "fills total: " + fills.length + "\n" +
     "trades total: " + trades.length + "\n" +
     "days total: " + days.length + "\n" +
@@ -592,7 +627,7 @@ function updateDay(){
   arrowValue = computeBehavior(currentDayTrades, efficiency);
   frozen = !!efficiency.limitTime;
 
-  dateEl.textContent = new Date(d0).toDateString();
+  dateEl.textContent = formatDateUTC(d0);
 
   if(selectedAtom){
     const exit = toMs(selectedAtom.exit_time);
@@ -670,7 +705,6 @@ function drawAtom(t, d0){
   const baseX = ((clamp(d0, exit, d1) - d0) / DAY) * W;
   const xExit = baseX + (t._flipOpen ? FLIP_SHIFT_PX : 0);
 
-  // store exact draw coordinates (truth for selection)
   t._px = xExit;
   t._py = y;
   t._dayKey = d0;
@@ -700,7 +734,6 @@ function drawAtom(t, d0){
   ctx.lineTo(xExit, y + dirBlue * blueLen);
   ctx.stroke();
 
-  // green tail is disabled in SAFE_MODE
   if(!SAFE_MODE){
     const exitPx = Number(t.exit_price);
     const mUp = Number(t.mkt_up);
@@ -759,11 +792,14 @@ function render(){
     ctx.stroke();
   }
 
+  // ✅ FIX: push arrow UP when trunc banner exists
+  // We pass a virtual "height" reduced by bottom pad, so behaviorArrow draws higher
+  const BOTTOM_PAD = truncated ? 36 : 0;
   drawBehaviorArrow(ctx,{
     value:arrowValue,
     frozen,
     width:W,
-    height:H
+    height:H - BOTTOM_PAD
   });
 
   requestAnimationFrame(render);
