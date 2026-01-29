@@ -89,7 +89,7 @@ canvas{display:block;touch-action:none}
 <script type="module">
 /* ===== Safe module import with version pin =====
    Bump V on deploy. This is your cache breaker. */
-const V = "idx-safe-22"; // ✅ bumped (cache break)
+const V = "idx-safe-23"; // ✅ bumped (cache break)
 
 /* Optional: ?safe=1 disables all tails (/market_window) calls */
 const qs0 = new URLSearchParams(location.search);
@@ -134,7 +134,7 @@ const FLIP_SHIFT_PX = 10;
 
 // tap selection
 const TAP_MAX_DX = 8;   // px
-const HIT_R = 28;       // px
+const HIT_R = 16;       // ✅ was 28 (smaller = easier to hit exact atom in dense clusters)
 
 let selectedAtom = null;
 let selectedDetailsText = "";
@@ -711,9 +711,9 @@ function drawAtom(t, d0){
 
   if(selectedAtom === t){
     ctx.strokeStyle = "rgba(0,0,0,.16)";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2;              /* ✅ was 4 */
     ctx.beginPath();
-    ctx.arc(xExit, y, 9, 0, Math.PI * 2);
+    ctx.arc(xExit, y, 5, 0, Math.PI * 2); /* ✅ was 9 (about 2x smaller area) */
     ctx.stroke();
     ctx.lineWidth = 1;
   }
