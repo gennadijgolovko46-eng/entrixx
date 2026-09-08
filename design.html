@@ -1,1 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ENTRIXX — Design Prototype</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg0:#07090f;
+    --bg1:#0b1020;
+    --glass:rgba(12,17,30,.66);
+    --line:rgba(255,255,255,.09);
+    --text:rgba(255,255,255,.92);
+    --muted:rgba(255,255,255,.46);
+    --blue:#6f8cff;
+    --green:#58e39a;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:
+    radial-gradient(1200px 700px at 50% 42%, rgba(38,61,115,.20), transparent 60%),
+    linear-gradient(180deg,var(--bg1),var(--bg0));
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+
+  #stage{
+    position:fixed;inset:0;
+    touch-action:none;
+  }
+  canvas{display:block;width:100%;height:100%}
+
+  .glass{
+    backdrop-filter:blur(16px) saturate(120%);
+    -webkit-backdrop-filter:blur(16px) saturate(120%);
+    background:var(--glass);
+    border:1px solid var(--line);
+    box-shadow:0 18px 48px rgba(0,0,0,.28);
+  }
+
+  #brand{
+    position:fixed;left:18px;top:16px;z-index:5;
+    pointer-events:none;
+  }
+  #brand .name{
+    font-size:13px;font-weight:700;letter-spacing:.22em;color:rgba(255,255,255,.90)
+  }
+  #brand .sub{
+    margin-top:5px;font-size:10px;letter-spacing:.13em;color:var(--muted)
+  }
+
+  #legend{
+    position:fixed;right:14px;top:14px;z-index:5;
+    display:flex;gap:10px;align-items:center;
+    padding:8px 10px;border-radius:12px;
+    font-size:10px;color:rgba(255,255,255,.60);
+    pointer-events:none;
+  }
+  .key{display:flex;align-items:center;gap:6px}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .blue{background:var(--blue);box-shadow:0 0 12px rgba(111,140,255,.8)}
+  .green{background:var(--green);box-shadow:0 0 12px rgba(88,227,154,.8)}
+
+  #details{
+    position:fixed;left:14px;top:62px;z-index:6;
+    width:min(330px,calc(100vw - 28px));
+    padding:13px 14px;border-radius:14px;
+    color:var(--text);
+    opacity:0;transform:translateY(-5px);
+    transition:.16s ease;
+    pointer-events:none;
+  }
+  #details.show{opacity:1;transform:none}
+  #details .ticker{
+    font-size:12px;font-weight:700;letter-spacing:.11em;margin-bottom:9px
+  }
+  #details .rows{
+    display:grid;grid-template-columns:auto 1fr;gap:5px 14px;
+    font-size:11px;line-height:1.35
+  }
+  #details .k{color:var(--muted)}
+  #details .v{text-align:right;color:rgba(255,255,255,.84)}
+
+  #date{
+    position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));z-index:5;
+    transform:translateX(-50%);
+    font-size:10px;letter-spacing:.11em;color:rgba(255,255,255,.42);
+    pointer-events:none;white-space:nowrap
+  }
+
+  #hint{
+    position:fixed;left:50%;bottom:44px;z-index:5;transform:translateX(-50%);
+    color:rgba(255,255,255,.24);font-size:9px;letter-spacing:.09em;
+    pointer-events:none;white-space:nowrap
+  }
+
+  #time{
+    position:fixed;top:12px;z-index:8;transform:translateX(-50%);
+    padding:6px 8px;border-radius:9px;
+    font-size:10px;color:rgba(255,255,255,.78);
+    opacity:0;pointer-events:none
+  }
+
+  #behavior{
+    position:fixed;left:14px;bottom:max(14px,env(safe-area-inset-bottom));z-index:5;
+    width:94px;padding:8px 10px;border-radius:12px;
+    pointer-events:none
+  }
+  #behavior .label{
+    font-size:8px;letter-spacing:.14em;color:rgba(255,255,255,.32)
+  }
+  #behavior .bar{
+    height:2px;margin-top:7px;background:rgba(255,255,255,.10);position:relative
+  }
+  #behavior .needle{
+    position:absolute;top:-3px;width:2px;height:8px;background:rgba(255,255,255,.68);
+    box-shadow:0 0 10px rgba(255,255,255,.38)
+  }
+
+  @media (max-width:560px){
+    #legend{top:52px;right:12px}
+    #details{top:94px}
+    #hint{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="brand">
+  <div class="name">ENTRIXX</div>
+  <div class="sub">DECISION MIRROR / VISUAL PROTOTYPE</div>
+</div>
+
+<div id="legend" class="glass">
+  <div class="key"><span class="dot blue"></span><span>HOLD</span></div>
+  <div class="key"><span class="dot green"></span><span>MARKET</span></div>
+</div>
+
+<div id="details" class="glass">
+  <div class="ticker" id="dTicker">MSTR</div>
+  <div class="rows">
+    <div class="k">Direction</div><div class="v" id="dDir">LONG</div>
+    <div class="k">Hold</div><div class="v" id="dHold">32m</div>
+    <div class="k">Entry</div><div class="v" id="dEntry">09:15Z</div>
+    <div class="k">Exit</div><div class="v" id="dExit">09:47Z</div>
+    <div class="k">Market move</div><div class="v" id="dMove">0.82%</div>
+  </div>
+</div>
+
+<div id="time" class="glass">12:00</div>
+<div id="hint">SWIPE DAYS · TAP AN ATOM</div>
+<div id="date">2026-09-08 UTC</div>
+
+<div id="behavior" class="glass">
+  <div class="label">BEHAVIOR</div>
+  <div class="bar"><div class="needle" id="needle"></div></div>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+
+/*
+  DESIGN-ONLY PROTOTYPE.
+  No Worker calls.
+  No D1 calls.
+  No imports from the production ENTRIXX code.
+  Static mock days only.
+*/
+
+const stage = document.getElementById("stage");
+const dateEl = document.getElementById("date");
+const timeEl = document.getElementById("time");
+const detailsEl = document.getElementById("details");
+const needle = document.getElementById("needle");
+
+const dTicker = document.getElementById("dTicker");
+const dDir = document.getElementById("dDir");
+const dHold = document.getElementById("dHold");
+const dEntry = document.getElementById("dEntry");
+const dExit = document.getElementById("dExit");
+const dMove = document.getElementById("dMove");
+
+const BLUE = 0x6f8cff;
+const GREEN = 0x58e39a;
+const NODE = 0xdce4ff;
+
+const renderer = new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0x000000,0);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x07090f,0.022);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 300);
+camera.position.set(0,18,44);
+camera.lookAt(0,0,0);
+
+const world = new THREE.Group();
+scene.add(world);
+
+// ambient light for subtle depth
+scene.add(new THREE.HemisphereLight(0xb7c4ff,0x06070d,1.35));
+const rim = new THREE.DirectionalLight(0xffffff,1.0);
+rim.position.set(-18,28,24);
+scene.add(rim);
+
+// base plane
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(92,34),
+  new THREE.MeshBasicMaterial({color:0x0b1120,transparent:true,opacity:.23,side:THREE.DoubleSide})
+);
+floor.rotation.x = -Math.PI/2;
+floor.position.y = -0.08;
+floor.position.z = -3;
+world.add(floor);
+
+// perspective grid
+const grid = new THREE.GridHelper(88,36,0x263653,0x162034);
+grid.material.transparent = true;
+grid.material.opacity = .24;
+grid.position.y = 0;
+world.add(grid);
+
+// central day axis
+const axisGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(-39,0.03,0),
+  new THREE.Vector3(39,0.03,0)
+]);
+const axis = new THREE.Line(axisGeo,new THREE.LineBasicMaterial({
+  color:0xbec8e8,transparent:true,opacity:.16
+}));
+world.add(axis);
+
+const dayGroup = new THREE.Group();
+world.add(dayGroup);
+
+const nodeGeo = new THREE.SphereGeometry(.28,14,14);
+const barGeo = new THREE.CylinderGeometry(.07,.07,1,8);
+const glowGeo = new THREE.SphereGeometry(.62,16,16);
+
+const clickable = [];
+let selected = null;
+
+function mulberry32(a){
+  return function(){
+    let t=a+=0x6D2B79F5;
+    t=Math.imul(t^t>>>15,t|1);
+    t^=t+Math.imul(t^t>>>7,t|61);
+    return ((t^t>>>14)>>>0)/4294967296;
+  }
+}
+
+function makeDay(seed,label,count,behavior){
+  const r = mulberry32(seed);
+  const coins = ["BTC","ETH","SOL","HYPE","MSTR","XMR","SUI","DOGE"];
+  const items=[];
+  for(let i=0;i<count;i++){
+    const minute = Math.floor(r()*1440);
+    const hold = 4 + Math.floor(r()*150);
+    const dir = r()>.47 ? 1 : -1;
+    const move = +(0.08+r()*1.55).toFixed(3);
+    items.push({
+      coin:coins[Math.floor(r()*coins.length)],
+      minute,
+      hold,
+      dir,
+      move,
+      depth:(r()-.5)*4.8
+    });
+  }
+  items.sort((a,b)=>a.minute-b.minute);
+  return {label,behavior,items};
+}
+
+const days = [
+  makeDay(12031,"2026-09-06 UTC",34,-0.44),
+  makeDay(51241,"2026-09-07 UTC",46, 0.12),
+  makeDay(97213,"2026-09-08 UTC",39, 0.58)
+];
+let dayIndex = days.length-1;
+
+function clearDay(){
+  clickable.length=0;
+  selected=null;
+  detailsEl.classList.remove("show");
+  while(dayGroup.children.length){
+    const o = dayGroup.children.pop();
+    o.traverse?.(x=>{
+      if(x.material && x.material.dispose) x.material.dispose();
+    });
+  }
+}
+
+function cylinderBetween(y0,y1,x,z,color,opacity=1,radiusScale=1){
+  const len = Math.max(.01,Math.abs(y1-y0));
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    emissive:color,
+    emissiveIntensity:.55,
+    roughness:.35,
+    metalness:.08,
+    transparent:opacity<1,
+    opacity
+  });
+  const mesh = new THREE.Mesh(barGeo,mat);
+  mesh.scale.set(radiusScale,len,radiusScale);
+  mesh.position.set(x,(y0+y1)/2,z);
+  return mesh;
+}
+
+function buildDay(){
+  clearDay();
+  const day = days[dayIndex];
+  dateEl.textContent = day.label;
+  needle.style.left = `${Math.round((day.behavior+1)*.5*100)}%`;
+
+  for(const t of day.items){
+    const x = -38 + (t.minute/1440)*76;
+    const z = t.depth;
+    const blueY = t.dir * (2.0 + (t.hold/160)*8.2);
+    const greenDir = ((t.minute + t.hold) % 2) ? 1 : -1;
+    const greenY = greenDir * (1.3 + Math.min(1.8,t.move)*4.1);
+
+    const blue = cylinderBetween(0,blueY,x,z,BLUE,.95,1.0);
+    dayGroup.add(blue);
+
+    const green = cylinderBetween(0,greenY,x+.42,z+.08,GREEN,.76,.85);
+    dayGroup.add(green);
+
+    const nodeMat = new THREE.MeshStandardMaterial({
+      color:NODE,emissive:0x93a7ff,emissiveIntensity:.42,
+      roughness:.18,metalness:.1
+    });
+    const node = new THREE.Mesh(nodeGeo,nodeMat);
+    node.position.set(x,0,z);
+    node.userData.trade=t;
+    node.userData.x=x;
+    node.userData.z=z;
+    dayGroup.add(node);
+    clickable.push(node);
+
+    const halo = new THREE.Mesh(glowGeo,new THREE.MeshBasicMaterial({
+      color:BLUE,transparent:true,opacity:.05,depthWrite:false,
+      blending:THREE.AdditiveBlending
+    }));
+    halo.position.copy(node.position);
+    dayGroup.add(halo);
+  }
+
+  // day marker at midnight/noon/end
+  for(const m of [0,720,1440]){
+    const x=-38+(m/1440)*76;
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x,0.015,-5.5),
+      new THREE.Vector3(x,0.015,5.5)
+    ]);
+    const line = new THREE.Line(g,new THREE.LineBasicMaterial({
+      color:0xffffff,transparent:true,opacity:m===720?.065:.035
+    }));
+    dayGroup.add(line);
+  }
+}
+buildDay();
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+function showDetails(mesh){
+  selected = mesh;
+  const t=mesh.userData.trade;
+  dTicker.textContent=t.coin;
+  dDir.textContent=t.dir>0?"LONG":"SHORT";
+  dHold.textContent=`${t.hold}m`;
+  const hh=Math.floor(t.minute/60), mm=t.minute%60;
+  const exit=(t.minute+t.hold)%1440;
+  dEntry.textContent=`${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}Z`;
+  dExit.textContent=`${String(Math.floor(exit/60)).padStart(2,"0")}:${String(exit%60).padStart(2,"0")}Z`;
+  dMove.textContent=`${t.move.toFixed(3)}%`;
+  detailsEl.classList.add("show");
+}
+
+function tapAt(clientX,clientY){
+  pointer.x=(clientX/innerWidth)*2-1;
+  pointer.y=-(clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(pointer,camera);
+  const hits=raycaster.intersectObjects(clickable,false);
+  if(hits.length) showDetails(hits[0].object);
+  else detailsEl.classList.remove("show");
+}
+
+let down=false,startX=0,startY=0,lastX=0,lastY=0;
+let cameraTargetX=0,cameraTargetY=18;
+
+renderer.domElement.addEventListener("pointerdown",e=>{
+  down=true;startX=lastX=e.clientX;startY=lastY=e.clientY;
+  renderer.domElement.setPointerCapture?.(e.pointerId);
+});
+
+renderer.domElement.addEventListener("pointermove",e=>{
+  lastX=e.clientX;lastY=e.clientY;
+  const nx=(e.clientX/innerWidth)-.5;
+  const ny=(e.clientY/innerHeight)-.5;
+  cameraTargetX=nx*2.8;
+  cameraTargetY=18-ny*1.6;
+
+  if(down){
+    timeEl.style.opacity=1;
+    timeEl.style.left=e.clientX+"px";
+    const minute=Math.max(0,Math.min(1439,Math.floor((e.clientX/innerWidth)*1440)));
+    timeEl.textContent=`${String(Math.floor(minute/60)).padStart(2,"0")}:${String(minute%60).padStart(2,"0")}`;
+  }
+});
+
+renderer.domElement.addEventListener("pointerup",e=>{
+  const dx=e.clientX-startX,dy=e.clientY-startY;
+  timeEl.style.opacity=0;
+  down=false;
+
+  if(Math.abs(dx)>52 && Math.abs(dx)>Math.abs(dy)){
+    if(dx>0 && dayIndex>0) dayIndex--;
+    if(dx<0 && dayIndex<days.length-1) dayIndex++;
+    buildDay();
+    return;
+  }
+  if(Math.hypot(dx,dy)<10) tapAt(e.clientX,e.clientY);
+});
+
+renderer.domElement.addEventListener("pointercancel",()=>{
+  down=false;timeEl.style.opacity=0;
+});
+
+function resize(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1,2));
+}
+addEventListener("resize",resize);
+
+let t0=performance.now();
+function animate(now){
+  const tt=(now-t0)*0.00018;
+  camera.position.x += (cameraTargetX-camera.position.x)*.035;
+  camera.position.y += (cameraTargetY-camera.position.y)*.035;
+  camera.position.z = 44 + Math.sin(tt)*.32;
+  camera.lookAt(0,.2,0);
+
+  world.rotation.y = Math.sin(tt*.55)*.018;
+  renderer.render(scene,camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
 
